@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(find /mnt/data/4 semester/DiscoProject -not -path */venv/* -type f)"
-    ]
-  }
-}
