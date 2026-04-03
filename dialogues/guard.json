@@ -1,0 +1,63 @@
+{
+  "entry": [
+    {"node": "friendly_start", "flag": "guard_passed"},
+    {"node": "start"}
+  ],
+  "start": {
+    "text": "Стой. Дальше без пропуска нельзя.",
+    "options": [
+      {"text": "У меня есть пропуск", "next": "has_pass"},
+      {"text": "Где его достать?", "next": "where_pass"},
+      {"text": "Ладно, уйду", "next": null}
+    ]
+  },
+  "friendly_start": {
+    "text": "Проходи, не задерживай очередь.",
+    "options": [
+      {"text": "Спасибо", "next": null}
+    ]
+  },
+  "has_pass": {
+    "text": "Хм... Ладно, проходи. Но без глупостей.",
+    "options": [
+      {"text": "Спасибо", "next": null}
+    ]
+  },
+  "where_pass": {
+    "text": "В ратуше выдают. Это на главной площади, не промахнёшься.",
+    "options": [
+      {"text": "Понял, спасибо", "next": null},
+      {"text": "А может договоримся?", "next": "bribe"}
+    ]
+  },
+  "bribe": {
+    "text": "Даже не думай. Иди в ратушу.",
+    "options": [
+      {"text": "[УБЕЖДЕНИЕ] Попытаться убедить его пропустить нас",
+        "check": {
+          "skill": "persuation",
+          "dc": 12,
+          "modifiers": [
+              {"label": "Найден пропуск", "value": 2, "flag": "hasPass"}
+          ],
+          "success": "bribe_success",
+          "failure": "bribe_failure"
+        }
+      },
+      {"text": "Хорошо-хорошо", "next": null}
+    ]
+  },
+  "bribe_success": {
+    "text": "Ладно проходи, видимо тут ошибка вышла.",
+    "set_flag": "guard_passed",
+    "options": [
+      {"text": "Спасибо", "next": null}
+    ]
+  },
+  "bribe_failure": {
+    "text": "Кого ты надурить пытаешься?! Вали отсюда пока я добрый.",
+    "options": [
+      {"text": "Ладно ладно, уже ухожу", "next": null}
+    ]
+  }
+}

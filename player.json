@@ -1,0 +1,20 @@
+{
+    "level": 1,
+    "skill_points": 0,
+    "attributes": [1, 1, 1, 1, 1],
+    "skills": {
+        "fortitude": 1, "endurance": 1, "musculature": 1, "close_combat": 1, "survival": 1,
+        "balance": 1, "initiative": 1, "lock_picking": 1, "theft": 1, "accuracy": 1,
+        "logic": 1, "knowledge": 1, "technology": 1, "short_memory": 1, "analysis": 1,
+        "empathy": 1, "authority": 1, "persuation": 1, "fear": 1, "volition": 1,
+        "vision": 1, "scent": 1, "hearing": 1, "tactility": 1, "intuition": 1
+    },
+    "position": {
+        "grid_x": 1,
+        "grid_y": 1
+    },
+    "location": "test",
+    "flags": {
+    
+    }
+}
