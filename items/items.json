@@ -1,0 +1,24 @@
+{
+  "old_pass": {
+    "name": "Старый пропуск",
+    "description": "Потрёпанный бумажный пропуск с печатью ратуши. Чернила почти выцвели.",
+    "icon": "old_pass.png",
+    "stackable": false,
+    "type": "quest"
+  },
+  "apple": {
+    "name": "Яблоко",
+    "description": "Сочное красное яблоко. Немного помятое, но вполне съедобное.",
+    "icon": "apple.png",
+    "stackable": true,
+    "type": "healing"
+  },
+  "book": {
+    "name": "Книга",
+    "description": "Древняя рукопись о войне Русов и Ящеров",
+    "icon": "book.png",
+    "stackable": false,
+    "type": "inspect",
+    "dialogue": "book"
+  }
+}

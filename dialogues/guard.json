@@ -1,4 +1,5 @@
 {
+  "npc_name": "Стражник",
   "entry": [
     {"node": "friendly_start", "flag": "guard_passed"},
     {"node": "start"}
@@ -8,6 +9,7 @@
     "options": [
       {"text": "У меня есть пропуск", "next": "has_pass"},
       {"text": "Где его достать?", "next": "where_pass"},
+      {"text": "А что за проход у тебя за спиной?", "next": "secret_passage", "flag": "noticed_passage"},
       {"text": "Ладно, уйду", "next": null}
     ]
   },
@@ -25,9 +27,80 @@
   },
   "where_pass": {
     "text": "В ратуше выдают. Это на главной площади, не промахнёшься.",
+    "passive_checks": [
+      {
+        "skill": "intuition",
+        "dc": 5,
+        "text": "Что-то в его позе выдаёт неуверенность. Он чуть сдвинулся — за его спиной виден узкий проход, который он старательно прикрывает.",
+        "portrait": "intuition",
+        "set_flag": "noticed_passage"
+      },
+      {
+        "skill": "fear",
+        "dc": 8,
+        "text": "Какого хера он тебя не пропускает? Ты что, собираешься слушать этого клоуна? Просто убей его и пройди.",
+        "portrait": "fear",
+        "set_flag": "fear_guard"
+      },
+      {
+        "skill": "logic",
+        "dc": 4,
+        "text": "Окей, давай попытаемся точно определить зачем нам так нужно попасть в ратушу",
+        "portrait": "logic",
+        "option_text": "И какая же у меня причина?",
+        "success_node": "good_reason"
+      }
+    ],
     "options": [
       {"text": "Понял, спасибо", "next": null},
-      {"text": "А может договоримся?", "next": "bribe"}
+      {"text": "А может договоримся?", "next": "bribe"},
+      {"text": "А что за проход у тебя за спиной?", "next": "secret_passage", "flag": "noticed_passage"},
+      {"text": "[СТРАХ] Угрожающе посмотреть на стражника", "next": "threaten_guard", "flag": "fear_guard"}
+    ]
+  },
+  "secret_passage": {
+    "text": "К-какой проход?! Нет тут никакого прохода! ...Ладно, только тихо. Проходи быстро, пока никто не видит.",
+    "set_flag": "guard_passed",
+    "options": [
+      {"text": "Спасибо за помощь", "next": null}
+    ]
+  },
+  "threaten_guard": {
+    "text": "Э-э... Спокойно, друг. Не надо так смотреть. Проходи, проходи, я ничего не видел.",
+    "set_flag": "guard_passed",
+    "options": [
+      {"text": "Так-то лучше", "next": null}
+    ]
+  },
+  "good_reason": {
+    "text": "Скажи ему что ты деловой партнёр приехавший налаживать связи по бизнесу с местным руководством, развивать международные отношения",
+    "passive_checks": [
+      {
+        "skill": "knowledge",
+        "dc": 5,
+        "text": "В незапямятные времена послы разных стран имели авторитет сравнимый с авторитетом местных королей",
+        "portrait": "knowledge"
+      }
+    ], 
+    "portrait": "logic",
+    "options": [
+      {"text": "Я вообще-то тут не абы кто, а важная шишка", "next": "important_man"},
+      {"text": "[Не говорить ничего, это глупо]", "next": "stupid"}
+    ]
+  },
+  "important_man": {
+    "text": "Да ну?",
+    "options": [
+      {"text": "Ещё как, я между прочим твоего босса знаю, мы тут с ним сейчас дела должны обсудить", "next": "bribe_success"}
+    ]
+  },
+  "stupid": {
+    "text": "Молодой охранник стоит столбом, на его лице не дрогнул ни мускул",
+    "options": [
+      {"text": "Понял, спасибо", "next": null},
+      {"text": "А может договоримся?", "next": "bribe"},
+      {"text": "А что за проход у тебя за спиной?", "next": "secret_passage", "flag": "noticed_passage"},
+      {"text": "[СТРАХ] Угрожающе посмотреть на стражника", "next": "threaten_guard", "flag": "fear_guard"}
     ]
   },
   "bribe": {

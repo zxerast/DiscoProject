@@ -14,7 +14,12 @@
         "grid_y": 1
     },
     "location": "test",
+    "inventory": [
+        {"id": "old_pass", "count": 1},
+        {"id": "apple", "count": 3},
+        {"id": "book", "count": 1}
+    ],
     "flags": {
-    
+
     }
 }

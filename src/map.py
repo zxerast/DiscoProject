@@ -8,7 +8,7 @@ class GameMap:
         self.npc_dialogues = npc_dialogues or {}  #   {(x, y): "dialogue_id"}
 
         self.height = len(grid)
-        self.width = len(grid[0])
+        self.width = max(len(row) for row in grid)
 
     def is_walkable(self, x, y):    #   Принимаем координаты точки назначения
         if x < 0 or y < 0:
@@ -17,6 +17,8 @@ class GameMap:
         if x >= self.width or y >= self.height:
             return False
 
+        if x >= len(self.grid[y]):
+            return False
         return self.grid[y][x] == 0 #   Если номер клетки в массиве 0 то возвращаем True иначе False
 
     def is_interactive(self, x, y):
@@ -26,6 +28,8 @@ class GameMap:
         if x >= self.width or y >= self.height:
             return False
         
+        if x >= len(self.grid[y]):
+            return False
         return self.grid[y][x] == 2
 
     def get_dialogue_id(self, x, y):
@@ -77,14 +81,14 @@ class GameMap:
     def draw(self, screen, cam_x=0, cam_y=0):
 
         for y in range(self.height):
-            for x in range(self.width):     #   Рисуем карту по описанию
+            for x in range(len(self.grid[y])):     #   Рисуем карту по описанию
                 rect = pygame.Rect(
                     x * self.tile_size - cam_x,
                     y * self.tile_size - cam_y,
                     self.tile_size,
                     self.tile_size,
                 )
-                
+
                 if self.grid[y][x] == 2:
                     pygame.draw.rect(screen, (180, 140, 60), rect)  #   Разные прямоугольники - разный функционал
                     pygame.draw.rect(screen, (60, 60, 60), rect, 1)

@@ -64,6 +64,7 @@ class Player:
         self.attributes = data["attributes"]
         self.skills = data["skills"]
         self.flags = data.get("flags", {})
+        self.inventory = data.get("inventory", [])
         self.location = data.get("location", "test")
 
         # Позиция из сейва (перезаписывает аргументы __init__)
@@ -83,6 +84,7 @@ class Player:
             "skills": self.skills,
             "position": {"grid_x": self.grid_x, "grid_y": self.grid_y},
             "location": self.location,
+            "inventory": self.inventory,
             "flags": self.flags,
         }
         with open(SAVE_PATH, "w", encoding="utf-8") as f:

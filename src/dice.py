@@ -3,6 +3,7 @@ import os
 import random
 from settings import get_scale, BASE_DIR
 from skills import SKILL_DISPLAY_NAMES
+from utils import FONT_PATH
 
 # Размер кубика в базовом разрешении (1366x768)
 DICE_BASE_W = 350
@@ -63,14 +64,13 @@ class SkillCheck:
 
         # Шрифт для числа на кубике
         scale = min(scale_x, scale_y)
-        font_path = os.path.join(BASE_DIR, "assets", "font", "web_ibm_mda.ttf")
-        self.font = pygame.font.Font(font_path, int(42 * scale))
+        self.font = pygame.font.Font(FONT_PATH, int(42 * scale))
 
         # Шрифты для надписей над/под кубиком
-        self.dc_label_font = pygame.font.Font(font_path, int(24 * scale))
-        self.dc_value_font = pygame.font.Font(font_path, int(40 * scale))
-        self.mod_font = pygame.font.Font(font_path, int(24 * scale))
-        self.result_font = pygame.font.Font(font_path, int(48 * scale))
+        self.dc_label_font = pygame.font.Font(FONT_PATH, int(24 * scale))
+        self.dc_value_font = pygame.font.Font(FONT_PATH, int(40 * scale))
+        self.mod_font = pygame.font.Font(FONT_PATH, int(24 * scale))
+        self.result_font = pygame.font.Font(FONT_PATH, int(48 * scale))
 
         self.reset()
 
@@ -149,10 +149,14 @@ class SkillCheck:
                     self.display_value = self.roll_value
                     self.text_alpha = 255
                     self.final_state = random.choice(self.states)
-
+                    # Сразу выносим вердикт при критическом успехе/провале
+                    if self.display_value == 20 or self.display_value == 1:
+                        self.modifiers = None
+                        self.phase = "wait_before_result"
+                    else:
                     # Переходим к паузе перед модификаторами
-                    self.phase = "wait_before_mods"
-                    self.phase_timer = 0
+                        self.phase = "wait_before_mods"
+                        self.phase_timer = 0
             return
 
         # === Фаза: пауза после выпадения числа ===
@@ -185,7 +189,17 @@ class SkillCheck:
             self.phase_timer += 1
             if self.phase_timer >= PHASE_WAIT_BEFORE_RESULT:
                 # Определяем результат
-                if self.display_value >= self.dc:
+                if self.display_value == 20 and self.roll_value == self.display_value:
+                    self.check_result = "success"
+                    self.dc_color = (80, 220, 80)
+                    self.result_text = "Критический успех"
+                    self.result_color = (80, 220, 80)
+                elif self.display_value == 1 and self.roll_value == self.display_value:
+                    self.check_result = "failure"
+                    self.dc_color = (220, 60, 60)
+                    self.result_text = "Критический провал"
+                    self.result_color = (220, 60, 60)
+                elif self.display_value >= self.dc:
                     self.check_result = "success"
                     self.dc_color = (80, 220, 80)
                     self.result_text = "Успех"

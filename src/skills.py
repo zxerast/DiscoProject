@@ -1,6 +1,10 @@
 import pygame
 import os
 from settings import BASE_DIR
+from utils import (
+    FONT_PATH, PREVIEW_W, PREVIEW_H, init_menu_base,
+    find_hovered, draw_hover_border, draw_zfill_value, Selection, PreviewPanel,
+)
 
 # 25 скиллов, сгруппированных по 5 основным атрибутам (индекс группы = индекс атрибута)
 SKILL_GROUPS = [
@@ -23,10 +27,6 @@ SKILL_GROUPS = [
 #   автоматически. Пропорции сохраняются — на нестандартных
 #   соотношениях сторон появятся чёрные полосы по краям.
 # =====================================================
-
-# Натуральный размер menu.png
-MENU_NATIVE_W = 1820
-MENU_NATIVE_H = 1024
 
 # Размер кнопок + и - (ширина, высота)
 BUTTON_W = 67
@@ -59,23 +59,6 @@ SKILL_ICON_POSITIONS = [
     # ВОС (ряд 5 — чуть ниже)
     (610, 809), (728, 809), (846, 809), (964, 809), (1082, 809),
 ]
-
-# Область превью навыка (тёмная панель справа)
-PREVIEW_X = 1228
-PREVIEW_Y = 168
-PREVIEW_W = 352
-PREVIEW_H = 498
-
-# Текст под превью: координата Y и размер шрифта
-PREVIEW_TEXT_Y = 692
-PREVIEW_TEXT_SIZE = 34
-
-CURR_VAL_SIZE = 37
-
-# Координаты счётчика значения скилла (в системе menu.png)
-CURR_VAL_X = 1286
-CURR_VAL_Y = 878
-CURR_VAL_DIGIT_GAP = 8
 
 # Координаты счётчиков основных атрибутов (в системе menu.png)
 # Между кнопками +/- для каждой группы
@@ -128,7 +111,6 @@ SKILL_NAMES = [
 
 # Надписи: текст, x, y, размер шрифта, цвет (R, G, B)
 SKILL_LABELS = [
-    {"text": "Навыки",  "x": 293, "y": 107, "size": 48, "color": (255, 255, 255)},
     {"text": "СИЛ",     "x": 400, "y": 244, "size": 40, "color": (255, 200, 0)},
     {"text": "ЛОВ",     "x": 400, "y": 397, "size": 40, "color": (255, 200, 0)},
     {"text": "ИНТ",     "x": 400, "y": 543, "size": 40, "color": (255, 200, 0)},
@@ -144,35 +126,16 @@ DIAMOND_GAP = 6
 
 # =====================================================
 
-FONT_PATH = os.path.join(BASE_DIR, "assets", "font", "web_ibm_mda.ttf")
-
 
 class SkillsWindow:
     def __init__(self, screen, player):
         self.screen = screen
         self.player = player
-        sw, sh = screen.get_size()
 
-        # Единый масштаб от натурального размера menu.png
-        size = min(sw / MENU_NATIVE_W, sh / MENU_NATIVE_H)
+        skills_dir = os.path.join(BASE_DIR, "assets", "skills")
+        size, menu_w, menu_h, self.offset_x, self.offset_y, self.bg = \
+            init_menu_base(screen, os.path.join(skills_dir, "menu.png"))
         self.size = size
-
-        # Размер отмасштабированного меню (с сохранением пропорций)
-        menu_w = int(MENU_NATIVE_W * size)
-        menu_h = int(MENU_NATIVE_H * size)
-
-        # Смещение для центрирования (чёрные полосы по краям)
-        self.offset_x = (sw - menu_w) // 2
-        self.offset_y = (sh - menu_h) // 2
-
-        base = BASE_DIR
-        skills_dir = os.path.join(base, "assets", "skills")
-
-        # Фон масштабирован пропорционально
-        self.bg = pygame.transform.scale(
-            pygame.image.load(os.path.join(skills_dir, "menu.png")).convert_alpha(),
-            (menu_w, menu_h),
-        )
 
         # Масштабированный размер кнопок
         btn_w = int(BUTTON_W * size)
@@ -246,19 +209,11 @@ class SkillsWindow:
             )
             self.skill_rects.append(rect)
 
-        # Область превью (тёмная панель справа)
-        self.preview_rect = pygame.Rect(
-            self.offset_x + int(PREVIEW_X * size),
-            self.offset_y + int(PREVIEW_Y * size),
-            int(PREVIEW_W * size),
-            int(PREVIEW_H * size),
-        )
+        # Панель превью (общая с inventory)
+        self.preview = PreviewPanel(screen, size, self.offset_x, self.offset_y)
 
-        # Шрифт и позиция текста под превью
-        self.preview_font = pygame.font.Font(FONT_PATH, int(PREVIEW_TEXT_SIZE * size))
-        self.curr_val_font = pygame.font.Font(FONT_PATH, int(CURR_VAL_SIZE * size))
-        self.preview_text_x = self.preview_rect.centerx
-        self.preview_text_y = self.offset_y + int(PREVIEW_TEXT_Y * size)
+        # Шрифт для счётчиков атрибутов (между кнопками +/-)
+        self.curr_val_font = self.preview.val_font
 
         # Спрайты очков навыков
         dp_size = int(DIAMOND_SIZE * 2 * size)
@@ -276,6 +231,8 @@ class SkillsWindow:
 
         # Шрифт для отображения числовых значений скиллов на иконках
         self.skill_value_font = pygame.font.Font(FONT_PATH, int(20 * size))
+
+        self.selection = Selection()
 
         # Сколько очков потрачено в текущей сессии (до подтверждения)
         self.pending_spent = [0, 0, 0, 0, 0]
@@ -300,6 +257,7 @@ class SkillsWindow:
                     self._shift_skills(i, -1)
                     self.pending_spent[i] -= 1
                 return None
+        self.selection.handle_click(self.skill_rects, pos)
         return None
 
     def confirm(self):
@@ -333,19 +291,12 @@ class SkillsWindow:
         for surf, pos in self.skill_labels:
             self.screen.blit(surf, pos)
 
-        # Счётчики основных атрибутов 
+        # Счётчики основных атрибутов
+        digit_gap = int(ATTR_VAL_DIGIT_GAP * self.size)
+        cx = self.offset_x + int(ATTR_VAL_X * self.size)
         for i, attr_y in enumerate(ATTR_VAL_POSITIONS_Y):
-            attr_val = self.player.attributes[i]
-            digits = str(attr_val).zfill(2)
-            digit_gap = int(ATTR_VAL_DIGIT_GAP * self.size)
-            d0_surf = self.curr_val_font.render(digits[0], True, (0, 0, 0))
-            d1_surf = self.curr_val_font.render(digits[1], True, (0, 0, 0))
-            total_w = d0_surf.get_width() + digit_gap + d1_surf.get_width()
-            cx = self.offset_x + int(ATTR_VAL_X * self.size)
             cy = self.offset_y + int(attr_y * self.size)
-            start_x = cx - total_w // 2
-            self.screen.blit(d0_surf, (start_x, cy))
-            self.screen.blit(d1_surf, (start_x + d0_surf.get_width() + digit_gap, cy))
+            draw_zfill_value(self.screen, self.curr_val_font, self.player.attributes[i], cx, cy, digit_gap)
 
         # Очки навыков — спрайты
         total_points = self.player.skill_points + sum(self.pending_spent)
@@ -355,8 +306,9 @@ class SkillsWindow:
             img = self.img_point_active if j < self.player.skill_points else self.img_point_unactive
             self.screen.blit(img, (x, self.diamond_y))
 
-        # Иконки скиллов: значение + белая обводка при наведении + превью справа
-        hovered_idx = None
+        # Иконки скиллов: значение + белая обводка при наведении/закреплении + превью справа
+        hovered_idx = find_hovered(self.skill_rects, mouse_pos)
+        active_idx = self.selection.get_active(self.skill_rects, mouse_pos)
         for i, rect in enumerate(self.skill_rects):
             # Отображаем числовое значение скилла под иконкой
             skill_name = SKILL_NAMES[i]
@@ -365,32 +317,16 @@ class SkillsWindow:
             val_rect = val_surf.get_rect(centerx=rect.centerx + 30, top=rect.bottom - 20)
             self.screen.blit(val_surf, val_rect)
 
-            if rect.collidepoint(mouse_pos):
-                pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                hovered_idx = i
+            if i == hovered_idx or i == self.selection.selected_idx:
+                draw_hover_border(self.screen, rect)
 
-        if hovered_idx is not None:
-            preview = self.skill_previews[hovered_idx]
-            self.screen.blit(preview, self.preview_rect)
-
-            name = SKILL_NAMES[hovered_idx]
+        if active_idx is not None:
+            name = SKILL_NAMES[active_idx]
             display_name = SKILL_DISPLAY_NAMES.get(name, name)
-            
-            name_surf = self.preview_font.render(display_name, True, (0, 0, 0))
-            name_rect = name_surf.get_rect(centerx=self.preview_text_x, y=self.preview_text_y)
-            self.screen.blit(name_surf, name_rect)
-
             curr_val = self.player.skills.get(name, 0)
-            digits = str(curr_val).zfill(2)
-            digit_gap = int(CURR_VAL_DIGIT_GAP * self.size)
-            d0_surf = self.curr_val_font.render(digits[0], True, (0, 0, 0))
-            d1_surf = self.curr_val_font.render(digits[1], True, (0, 0, 0))
-            total_w = d0_surf.get_width() + digit_gap + d1_surf.get_width()
-            cx = self.offset_x + int(CURR_VAL_X * self.size)
-            cy = self.offset_y + int(CURR_VAL_Y * self.size)
-            start_x = cx - total_w // 2
-            self.screen.blit(d0_surf, (start_x, cy))
-            self.screen.blit(d1_surf, (start_x + d0_surf.get_width() + digit_gap, cy))
-
-          
+            self.preview.draw(
+                icon=self.skill_previews[active_idx],
+                name=display_name,
+                value=curr_val,
+            )
 

@@ -4,7 +4,10 @@ from player import Player
 from locations.test import room
 from dialogue import DialogueWindow, load_dialogue
 from skills import SkillsWindow
+from inventory import InventoryWindow
+from quests import QuestsWindow
 from settings import BASE_WIDTH, BASE_HEIGHT
+from utils import MENU_NATIVE_W, MENU_NATIVE_H, FONT_PATH
 from dice import SkillCheck
 
 
@@ -31,11 +34,60 @@ class Game:
         self.pending_dialogue = False   #   Нужно ли открыть диалог по достижении цели?
         self.pending_dialogue_id = None #   Какой диалог открыть
 
-        self.skills_active = False  #   Открыто ли окно навыков?
+        self.menu_active = False        # Открыто ли меню (табы)?
+        self.menu_tab = 0               # 0=Навыки, 1=Инвентарь, 2=Задания
+        self.skills_active = False      # alias для обратной совместимости
+
         self.skills_window = SkillsWindow(self.screen, self.player)
+        self.inventory_window = InventoryWindow(self.screen, self.player)
+        self.quests_window = QuestsWindow(self.screen, self.player)
+
+        self.menu_windows = [self.skills_window, self.inventory_window, self.quests_window]
+
+        # Табы вверху меню
+        self._init_tabs()
 
         self.skill_check = False    #   Открыто ли окно с кубиком
         self.dice_window = SkillCheck(self.screen)
+
+    def _init_tabs(self):   #   Создаёт прямоугольники и текстовые поверхности для 3 табов.
+        size = min(self.sw / MENU_NATIVE_W, self.sh / MENU_NATIVE_H)
+
+        tab_names = ["Навыки  ", "  Инвентарь ", "  Задания"]
+
+        tab_h = int(111 * size)
+        tab_gap = int(21 * size)
+        tab_y = int(17 * size)
+
+        self.tab_font = pygame.font.Font(FONT_PATH, int(50 * size))
+        self.tab_names = tab_names
+
+        # Ширина каждого таба подгоняется под текст + отступы
+        padding = int(40 * size)
+        self.tab_rects = []
+        x = int(270 * size)
+        for name in tab_names:
+            text_w = self.tab_font.size(name)[0]
+            tab_w = text_w + padding * 2
+            rect = pygame.Rect(x, tab_y, tab_w, tab_h)
+            self.tab_rects.append(rect)
+            x += tab_w + tab_gap
+
+    def _draw_tabs(self):   #   Рисует 3 таба вверху экрана.
+        mouse_pos = pygame.mouse.get_pos()
+        for i, rect in enumerate(self.tab_rects):
+            # Цвет надписи: выбранный — чёрный, hover — белый, обычный — жёлтый
+            if i == self.menu_tab:
+                color = (0, 0, 0)
+            elif rect.collidepoint(mouse_pos):
+                color = (255, 255, 255)
+            else:
+                color = (255, 200, 0)
+
+            label = self.tab_font.render(self.tab_names[i], True, color)
+            lx = rect.x + (rect.w - label.get_width()) // 2
+            ly = rect.y + (rect.h - label.get_height()) // 2
+            self.screen.blit(label, (lx, ly))
 
     def run(self):
         while self.running:
@@ -57,9 +109,12 @@ class Game:
                 continue
 
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
-                if self.skills_active:
+                if self.menu_active:
                     self.skills_window.confirm()
-                self.skills_active = not self.skills_active
+                self.menu_active = not self.menu_active
+                self.skills_active = self.menu_active
+                if self.menu_active:
+                    self.menu_tab = 0  # открываем на вкладке навыков
                 continue
 
 
@@ -67,17 +122,65 @@ class Game:
                 self.player.level_up()
                 continue
 
+            # --- Прокрутка колёсиком в диалоге ---
+            elif event.type == pygame.MOUSEWHEEL:
+                if self.dialogue_active and self.dialogue:
+                    self.dialogue.handle_scroll(event.y)
+                continue
+
+            # --- Отпускание кнопки мыши ---
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if self.dialogue_active and self.dialogue:
+                    self.dialogue.handle_mouseup()
+                elif self.menu_active and self.menu_tab == 1:
+                    result = self.inventory_window.handle_mouseup(event.pos)
+                    if isinstance(result, dict) and result.get("action") == "inspect":
+                        dialogue_data = load_dialogue(result["dialogue_id"])
+                        self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player)
+                        self.dialogue_active = True
+                        self.menu_active = False
+                        self.skills_active = False
+                continue
+
+            # --- Перемещение мыши ---
+            elif event.type == pygame.MOUSEMOTION:
+                if self.dialogue_active and self.dialogue:
+                    self.dialogue.handle_mousemotion(event.pos)
+                elif self.menu_active and self.menu_tab == 1:
+                    self.inventory_window.handle_mousemotion(event.pos)
+                continue
+
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self.skill_check:
                     self.dice_window.handle_click(event.pos)
                     continue
 
-                if self.skills_active:
-                    self.skills_window.handle_click(event.pos)
+                if self.menu_active:
+                    # Проверяем клик по табам
+                    tab_clicked = False
+                    for i, rect in enumerate(self.tab_rects):
+                        if rect.collidepoint(event.pos):
+                            if self.menu_tab == 0:
+                                self.skills_window.confirm()
+                            self.menu_tab = i
+                            self.skills_active = (i == 0)
+                            tab_clicked = True
+                            break
+                    if not tab_clicked:
+                        if self.menu_tab == 1:
+                            result = self.inventory_window.handle_mousedown(event.pos)
+                            if isinstance(result, dict) and result.get("action") == "inspect":
+                                dialogue_data = load_dialogue(result["dialogue_id"])
+                                self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player)
+                                self.dialogue_active = True
+                                self.menu_active = False
+                                self.skills_active = False
+                        else:
+                            self.menu_windows[self.menu_tab].handle_click(event.pos)
                     continue
 
                 if self.dialogue_active:
-                    choice = self.dialogue.handle_click(event.pos)   #   Клик по варианту ответа
+                    choice = self.dialogue.handle_mousedown(event.pos, event.button)
 
                     if choice == "check":
                         check = self.dialogue.pending_check
@@ -92,7 +195,7 @@ class Game:
 
                         self.skill_check = True
                         self.dialogue_active = False    # Прячем диалог на время броска
-                    
+
 
                     if choice == "close":
                         self.dialogue_active = False
@@ -126,7 +229,7 @@ class Game:
                 self.dice_window.reset()
             return
 
-        if self.skills_active:
+        if self.menu_active:
             return
 
         self.player.update()
@@ -148,8 +251,9 @@ class Game:
         if self.dialogue_active and self.dialogue:  #   Диалоговое окно
             self.dialogue.draw()
 
-        if self.skills_active:  #   Окно навыков
-            self.skills_window.draw()
+        if self.menu_active:  #   Окно меню (навыки/инвентарь/задания)
+            self.menu_windows[self.menu_tab].draw()
+            self._draw_tabs()
 
         if self.skill_check:   #   Окно броска кубика
             self.dice_window.draw()
