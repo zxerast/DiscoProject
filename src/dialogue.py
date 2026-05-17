@@ -1,17 +1,18 @@
 import pygame
 import os
 import json
-import random
-from settings import BASE_WIDTH, BASE_HEIGHT, get_scale, BASE_DIR
-from utils import wrap_text, FONT_PATH
+from settings import get_uniform_scale, BASE_DIR, SAVE_DIR
+from utils import wrap_text, FONT_PATH, Scrollbar
 
 ASSETS_PATH = os.path.join(BASE_DIR, "assets", "dialogue_window")
 DIALOGUES_PATH = os.path.join(BASE_DIR, "dialogues")
+SAVE_DIALOGUES_PATH = os.path.join(SAVE_DIR, "dialogues")
 SKILLS_PATH = os.path.join(BASE_DIR, "assets", "skills")
 
 
 def load_dialogue(dialogue_id):
-    path = os.path.join(DIALOGUES_PATH, f"{dialogue_id}.json")
+    save_path = os.path.join(SAVE_DIALOGUES_PATH, f"{dialogue_id}.json")
+    path = save_path if os.path.exists(save_path) else os.path.join(DIALOGUES_PATH, f"{dialogue_id}.json")
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -26,46 +27,50 @@ class DialogueWindow:
     def __init__(self, screen, dialogue_data, player, node_id=None):
         self.screen = screen
         sw, sh = screen.get_size()
-        sx, sy = get_scale(screen)
+        scale = get_uniform_scale(screen)
 
         raw = pygame.image.load(os.path.join(ASSETS_PATH, "window.png")).convert_alpha()
 
-        w = sw - int(200 * sx)
+        w = sw - int(200 * scale)
         h = int(raw.get_height() * w / raw.get_width())
 
         self.image = pygame.transform.scale(raw, (w, h))
 
-        self.rect = self.image.get_rect(midbottom=(sw // 2, sh - sy))   # Расположение окна диалога
+        self.rect = self.image.get_rect(midbottom=(sw // 2, sh - scale))   # Расположение окна диалога
 
-        self.font = pygame.font.Font(FONT_PATH, int(22 * sy))  # Текст ответа
-        self.option_font = pygame.font.Font(FONT_PATH, int(20 * sy))   # Текст вопросов
+        self.font = pygame.font.Font(FONT_PATH, int(22 * scale))  # Текст ответа
+        self.option_font = pygame.font.Font(FONT_PATH, int(20 * scale))   # Текст вопросов
 
         # Область текста NPC (все значения для базового 1366x768, масштабируются)
-        self.text_offset_x = int(280 * sx)
-        self.text_offset_y = int(290 * sy)
-        self.text_width = self.rect.width - int(640 * sx)
-        self.text_line_height = int(28 * sy)
+        self.text_offset_x = int(280 * scale)
+        self.text_offset_y = int(290 * scale)
+        self.text_width = self.rect.width - int(640 * scale)
+        self.text_line_height = int(28 * scale)
 
         # Область кнопок ответов
-        self.options_offset_x = int(850 * sx)
-        self.options_offset_y = int(290 * sy)
-        self.options_width = self.rect.width - int(930 * sx)
-        self.option_line_height = int(24 * sy)
-        self.option_padding_y = int(6 * sy)
-        self.button_gap = int(8 * sy)
-        self.option_text_pad_x = int(12 * sx)
-        self.option_wrap_pad = int(24 * sx)
-        self.options_clip_y = int(270 * sy)    # Верхняя граница clip-области (выше чем offset_y)
-        self.options_height = self.rect.height - int(310 * sy)  # Видимая высота области ответов (от clip_y)
-        self.scroll_speed = int(30 * sy)    # Скорость прокрутки колёсиком
+        self.options_offset_x = int(850 * scale)
+        self.options_offset_y = int(290 * scale)
+        self.options_width = self.rect.width - int(930 * scale)
+        self.option_line_height = int(24 * scale)
+        self.option_padding_y = int(6 * scale)
+        self.button_gap = int(8 * scale)
+        self.option_text_pad_x = int(12 * scale)
+        self.option_wrap_pad = int(24 * scale)
+        self.options_clip_y = int(270 * scale)    # Верхняя граница clip-области (выше чем offset_y)
+        self.options_height = self.rect.height - int(310 * scale)  # Видимая высота области ответов (от clip_y)
+        self.scroll_speed = int(30 * scale)    # Скорость прокрутки колёсиком
 
-        # Прокрутка ответов
-        self.scroll_offset = 0      # Текущее смещение прокрутки
         self.total_options_h = 0    # Полная высота всех кнопок
-        self.max_scroll = 0         # Максимальное смещение
-        self.dragging_scroll = False  # Перетаскиваем ползунок?
-        self.drag_start_y = 0       # Начальная точка перетаскивания
-        self.drag_start_offset = 0  # Смещение прокрутки в начале перетаскивания
+        self.scrollbar = Scrollbar(
+            pygame.Rect(
+                self.rect.x + self.options_offset_x + self.options_width - 10,
+                self.rect.y + self.options_clip_y,
+                8,
+                self.options_height,
+            ),
+            self.scroll_speed,
+            20,
+        )
 
         # Область портрета навыка (левая часть окна диалога)
         # Единый масштаб от натурального размера window.png (1536x700)
@@ -113,66 +118,32 @@ class DialogueWindow:
         # Видимое пространство для контента = options_height - (offset_y - clip_y)
         self.total_options_h = current_y - base_y
         visible_content_h = self.options_height - (self.options_offset_y - self.options_clip_y)
-        self.max_scroll = max(0, self.total_options_h - visible_content_h)
-        self.scroll_offset = 0
+        self.scrollbar.set_content(
+            self.total_options_h,
+            visible_content_h,
+            thumb_visible_height=self.options_height,
+            reset=True,
+        )
 
     def handle_scroll(self, dy):    #   Прокрутка колёсиком мыши. dy > 0 — вверх, dy < 0 — вниз.
-        if not self.active or self.max_scroll == 0:
+        if not self.active:
             return
-        self.scroll_offset -= dy * self.scroll_speed
-        self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
+        self.scrollbar.handle_scroll(dy)
 
     def handle_mousedown(self, pos, button):    #   Обработка нажатия кнопки мыши (ЛКМ — клик/захват ползунка).
         if not self.active:
             return None
-        if button == 1 and self.max_scroll > 0:
-            track_rect = self._get_scrollbar_track()
-            thumb_rect = self._get_scrollbar_thumb()
-            if thumb_rect and thumb_rect.collidepoint(pos):
-                self.dragging_scroll = True
-                self.drag_start_y = pos[1]
-                self.drag_start_offset = self.scroll_offset
-                return None
-            elif track_rect and track_rect.collidepoint(pos):
-                # Клик по дорожке — прыжок к позиции
-                ratio = (pos[1] - track_rect.y) / track_rect.height
-                self.scroll_offset = int(ratio * self.max_scroll)
-                self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
-                return None
+        if button == 1 and self.scrollbar.handle_mousedown(pos):
+            return None
         if button == 1:
             return self.handle_click(pos)
         return None
 
     def handle_mouseup(self):   #   Отпускание кнопки мыши — прекращаем перетаскивание.
-        self.dragging_scroll = False
+        self.scrollbar.handle_mouseup()
 
     def handle_mousemotion(self, pos):  #   Перемещение мыши при зажатой кнопке — перетаскивание ползунка.
-        if self.dragging_scroll and self.max_scroll > 0:
-            track_rect = self._get_scrollbar_track()
-            thumb_h = self._get_thumb_height()
-            drag_range = track_rect.height - thumb_h
-            if drag_range > 0:
-                dy = pos[1] - self.drag_start_y
-                self.scroll_offset = self.drag_start_offset + int(dy / drag_range * self.max_scroll)
-                self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
-
-    def _get_scrollbar_track(self): #   Прямоугольник дорожки скроллбара.
-        x = self.rect.x + self.options_offset_x + self.options_width - 10
-        y = self.rect.y + self.options_clip_y
-        return pygame.Rect(x, y, 8, self.options_height)
-
-    def _get_thumb_height(self):    #   Высота ползунка пропорционально видимой области.
-        ratio = self.options_height / self.total_options_h
-        return max(20, int(self.options_height * ratio))
-
-    def _get_scrollbar_thumb(self): #   Прямоугольник ползунка.
-        if self.max_scroll == 0:
-            return None
-        track = self._get_scrollbar_track()
-        thumb_h = self._get_thumb_height()
-        scroll_ratio = self.scroll_offset / self.max_scroll
-        thumb_y = track.y + int(scroll_ratio * (track.height - thumb_h))
-        return pygame.Rect(track.x, thumb_y, track.width, thumb_h)
+        self.scrollbar.handle_mousemotion(pos)
 
     def handle_click(self, pos):
         if not self.active:
@@ -188,7 +159,7 @@ class DialogueWindow:
             return None
 
         for i, rect in enumerate(self.option_rects):
-            scrolled = rect.move(0, -self.scroll_offset)
+            scrolled = rect.move(0, -self.scrollbar.scroll_offset)
             if scrolled.collidepoint(pos):
 
                 # Клик при пассивной проверке
@@ -238,6 +209,13 @@ class DialogueWindow:
                     return "continue"
 
                 opt = self.option_data[i]
+                damage = opt.get("damage_on_failure", 0)
+                if damage:
+                    self.player.take_damage(damage)
+
+                if "change_to" in opt:
+                    self.active = False
+                    return {"action": "change_tile", "change_to": opt["change_to"]}
 
                 #   Вариант с проверкой навыка
                 if "check" in opt:
@@ -285,14 +263,23 @@ class DialogueWindow:
         raw = pygame.image.load(path).convert_alpha()
         return pygame.transform.scale(raw, (self.portrait_w, self.portrait_h))
 
+    def _set_flags(self, flags):
+        if not flags:
+            return
+        if isinstance(flags, str):
+            self.player.set_flag(flags)
+            return
+        if isinstance(flags, list):
+            for flag in flags:
+                if isinstance(flag, str):
+                    self.player.set_flag(flag)
+
     def set_node(self, node_id):
         node = self.dialogue_data[node_id]
         self.current_node_id = node_id
 
         # Ставим флаг, если узел его задаёт
-        flag = node.get("set_flag")
-        if flag:
-            self.player.set_flag(flag)
+        self._set_flags(node.get("set_flag"))
 
         self.answer_text = node["text"]
 
@@ -312,9 +299,7 @@ class DialogueWindow:
             if skill_val >= check["dc"]:
                 self.passive_queue.append(check)
                 # Ставим флаг при успешной проверке
-                check_flag = check.get("set_flag")
-                if check_flag:
-                    self.player.set_flag(check_flag)
+                self._set_flags(check.get("set_flag"))
 
         # Вставки идут первыми, переходы на ветку — последними
         self.passive_queue.sort(key=lambda c: 1 if c.get("success_node") else 0)
@@ -372,7 +357,7 @@ class DialogueWindow:
         for i in range(len(self.option_rects)):
             rect = self.option_rects[i]
             # Смещаем по вертикали на scroll_offset
-            draw_y = rect.y - self.scroll_offset
+            draw_y = rect.y - self.scrollbar.scroll_offset
             hovered = pygame.Rect(rect.x, draw_y, rect.w, rect.h).collidepoint(mouse_pos)
 
             # Фон кнопки
@@ -391,12 +376,6 @@ class DialogueWindow:
                 ))
 
         # --- Ползунок прокрутки ---
-        if self.max_scroll > 0:
-            track = self._get_scrollbar_track()
-            pygame.draw.rect(self.screen, (10, 34, 14), track)
-            thumb = self._get_scrollbar_thumb()
-            if thumb:
-                thumb_color = (30, 127, 34) if self.dragging_scroll else (29, 75, 31)
-                pygame.draw.rect(self.screen, thumb_color, thumb)
+        self.scrollbar.draw(self.screen)
 
         self.screen.set_clip(None)

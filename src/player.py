@@ -1,10 +1,12 @@
 import pygame
 import os
 import json
-from settings import get_scale, BASE_DIR
+from settings import get_uniform_scale, BASE_DIR, SAVE_DIR
 from skills import SKILL_GROUPS
 
 SAVE_PATH = os.path.join(BASE_DIR, "player.json")
+QUESTS_PATH = os.path.join(BASE_DIR, "quests.json")
+SAVE_QUESTS_PATH = os.path.join(SAVE_DIR, "quests.json")
 
 
 # Размер спрайта персонажа (для базового разрешения 1366x768)
@@ -13,20 +15,15 @@ PLAYER_HEIGHT = 160
 
 
 class Player:
-    def __init__(self, grid_x, grid_y, game_map, screen):
-        self.grid_x = grid_x
-        self.grid_y = grid_y
+    def __init__(self, game_map, screen, save_path=SAVE_PATH):
+        self.save_path = save_path
         self.game_map = game_map
 
-        sx, sy = get_scale(screen)
+        scale = get_uniform_scale(screen)
 
-        ts = game_map.tile_size     #   Размер клетки
-        self.x = float(grid_x * ts + ts // 2) # Переводим координаты персонажа в координаты клетки
-        self.y = float(grid_y * ts + ts // 2)
-
-        self.width = int(PLAYER_WIDTH * sx)
-        self.height = int(PLAYER_HEIGHT * sy)
-        self.speed = 3
+        self.width = int(PLAYER_WIDTH * scale)
+        self.height = int(PLAYER_HEIGHT * scale)
+        self.speed = 3 * scale
 
         base = BASE_DIR   #   Место откуда берём анимации
 
@@ -47,20 +44,21 @@ class Player:
         self.animation_speed = 0.1
         self.image = self.direction[0]
         self.rect = self.image.get_rect()   #   Создаём прямоугольник для персонажа
-        self.rect.midbottom = (int(self.x), int(self.y) + game_map.tile_size // 2)  #   Ставим этот прямоугольник нижней частью на пол
+        self.rect.midbottom = (0, game_map.tile_size // 2)  #   Позиция ниже загрузится из сохранения
 
         self.path = []
-        self.target_x = self.x
-        self.target_y = self.y
         self.is_moving = False
 
         # Загружаем состояние из JSON
         self._load_save()
 
     def _load_save(self):
-        with open(SAVE_PATH, "r", encoding="utf-8") as f: data = json.load(f)
+        with open(self.save_path, "r", encoding="utf-8") as f: data = json.load(f)
         self.level = data["level"]
         self.skill_points = data["skill_points"]
+        self.health_points = data["HP"]
+        self.xp_points = data["XP"]
+        self.xp_cap = data["XP_cap"]
         self.attributes = data["attributes"]
         self.skills = data["skills"]
         self.flags = data.get("flags", {})
@@ -74,12 +72,18 @@ class Player:
         ts = self.game_map.tile_size
         self.x = float(self.grid_x * ts + ts // 2)
         self.y = float(self.grid_y * ts + ts // 2)
+        self.target_x = self.x
+        self.target_y = self.y
         self.rect.midbottom = (int(self.x), int(self.y) + ts // 2)
+        self.health_points = max(1, min(self.health_points, self.get_max_health()))
 
     def save(self):
         data = {
             "level": self.level,
             "skill_points": self.skill_points,
+            "HP": self.health_points,
+            "XP": self.xp_points,
+            "XP_cap": self.xp_cap,
             "attributes": self.attributes,
             "skills": self.skills,
             "position": {"grid_x": self.grid_x, "grid_y": self.grid_y},
@@ -87,11 +91,84 @@ class Player:
             "inventory": self.inventory,
             "flags": self.flags,
         }
-        with open(SAVE_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        with open(self.save_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)    #   Сохраняемся дампя всё собранное 
 
     def set_flag(self, flag_name, value=True):
         self.flags[flag_name] = value
+        if value is True and flag_name.endswith("_completed"):
+            self.normalize_completed_quest_stage_flag(flag_name)
+        if value is True:
+            self.normalize_quest_stage_flags(flag_name)
+            self.award_completed_quest_xp()
+
+    def complete_quest_stage(self, stage_flag):
+        self.flags.pop(stage_flag, None)
+        self.flags[f"{stage_flag}_completed"] = True
+
+    def _parse_quest_stage_flag(self, flag_name):
+        if flag_name.endswith("_completed") or "_stage_" not in flag_name:
+            return None
+
+        prefix, stage_num = flag_name.rsplit("_stage_", 1)
+        if not stage_num.isdigit():
+            return None
+
+        return f"{prefix}_stage_", int(stage_num)
+
+    def _parse_completed_quest_stage_flag(self, flag_name):
+        if not flag_name.endswith("_completed"):
+            return None
+
+        active_flag = flag_name[:-10]
+        parsed = self._parse_quest_stage_flag(active_flag)
+        if not parsed:
+            return None
+
+        return parsed[0], parsed[1], active_flag
+
+    def normalize_completed_quest_stage_flag(self, completed_flag):
+        parsed = self._parse_completed_quest_stage_flag(completed_flag)
+        if not parsed:
+            return
+
+        prefix, completed_stage_num, active_flag = parsed
+        self.flags.pop(active_flag, None)
+
+        for stage_num in range(1, completed_stage_num):
+            previous_flag = f"{prefix}{stage_num}"
+            self.flags.pop(previous_flag, None)
+            self.flags[f"{previous_flag}_completed"] = True
+
+    def normalize_quest_stage_flags(self, changed_flag=None):
+        parsed_changed = self._parse_quest_stage_flag(changed_flag) if changed_flag else None
+        if parsed_changed:
+            prefixes = {parsed_changed[0]}
+        else:
+            prefixes = set()
+            for flag_name, value in self.flags.items():
+                if value is not True:
+                    continue
+                parsed = self._parse_quest_stage_flag(flag_name)
+                if parsed:
+                    prefixes.add(parsed[0])
+
+        for prefix in prefixes:
+            active_stages = []
+            for flag_name, value in self.flags.items():
+                if value is not True:
+                    continue
+                parsed = self._parse_quest_stage_flag(flag_name)
+                if parsed and parsed[0] == prefix:
+                    active_stages.append((parsed[1], flag_name))
+
+            if len(active_stages) < 2:
+                continue
+
+            latest_stage_num = max(stage_num for stage_num, _flag_name in active_stages)
+            for stage_num, flag_name in active_stages:
+                if stage_num < latest_stage_num:
+                    self.complete_quest_stage(flag_name)
 
     def get_flag(self, flag_name):
         return self.flags.get(flag_name, False)
@@ -105,9 +182,59 @@ class Player:
                 return attr_idx
         return -1
 
-    def level_up(self):
-        self.level += 1
-        self.skill_points += 1
+    def _load_quests_catalog(self):
+        path = SAVE_QUESTS_PATH if os.path.exists(SAVE_QUESTS_PATH) else QUESTS_PATH
+        if not os.path.exists(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def award_completed_quest_xp(self):
+        for quest_id, quest in self._load_quests_catalog().items():
+            reward_flag = f"{quest_id}_xp_awarded"
+            if self.flags.get(reward_flag):
+                continue
+
+            stage_flags = [
+                stage.get("complete_flag")
+                for stage in quest.get("stages", [])
+                if stage.get("complete_flag")
+            ]
+            if stage_flags and all(self.flags.get(f"{flag}_completed") is True for flag in stage_flags):
+                self.add_xp(quest.get("xp_reward", 0))
+                self.flags[reward_flag] = True
+
+    def add_xp(self, xp):
+        self.xp_points += xp
+        while self.xp_points >= self.xp_cap:
+            self.level += 1
+            self.skill_points += 1
+            self.xp_points -= self.xp_cap 
+            self.xp_cap += 25
+
+    def get_max_health(self):
+        return max(1, self.get_skill("fortitude"))
+
+    def take_damage(self, damage=1):
+        self.health_points = max(0, self.health_points - damage)
+
+    def heal(self, heal_points):
+        self.health_points = min(self.get_max_health(), self.health_points + heal_points)
+
+    def set_map_position(self, game_map, grid_x, grid_y, location=None):
+        self.game_map = game_map
+        self.grid_x = grid_x
+        self.grid_y = grid_y
+        self.path = []
+        self.is_moving = False
+        self.target_x, self.target_y = game_map.grid_to_pixel_center(grid_x, grid_y)
+        self.x = float(self.target_x)
+        self.y = float(self.target_y)
+        self.current_frame = 0
+        self.image = self.direction[0]
+        self.rect.midbottom = (int(self.x), int(self.y) + game_map.tile_size // 2)
+        if location:
+            self.location = location
 
     def set_target(self, mouse_x, mouse_y):
         gx, gy = self.game_map.pixel_to_grid(mouse_x, mouse_y)  #   Корды точки назначения в корды по клеткам
@@ -121,7 +248,7 @@ class Player:
         if len(path) > 1:
             self.path = path[1:]    #   Отбрасываем первую точку на которой мы стоим и начинаем путь со второй
             self._next_waypoint()
-
+    
     def _next_waypoint(self):
         if not self.path:   #   Если в пути закончились клетки
             self.is_moving = False  #   Останавливаемя

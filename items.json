@@ -4,14 +4,16 @@
     "description": "Потрёпанный бумажный пропуск с печатью ратуши. Чернила почти выцвели.",
     "icon": "old_pass.png",
     "stackable": false,
-    "type": "quest"
+    "type": "inspect",
+    "dialogue": "old_pass"
   },
   "apple": {
     "name": "Яблоко",
     "description": "Сочное красное яблоко. Немного помятое, но вполне съедобное.",
     "icon": "apple.png",
     "stackable": true,
-    "type": "healing"
+    "type": "healing",
+    "heal_points": 1
   },
   "book": {
     "name": "Книга",

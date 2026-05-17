@@ -1,14 +1,22 @@
 import pygame
+import copy
 from collections import deque
 
 class GameMap:
-    def __init__(self, grid, tile_size=64, npc_dialogues=None):
+    def __init__(self, grid, tile_size=64, npc_dialogues=None, chests=None, doors=None, tile_changes=None):
+        self.base_tile_size = tile_size
         self.grid = grid    #   Принимаем текущую карту с её интерактивными объектами
         self.tile_size = tile_size
         self.npc_dialogues = npc_dialogues or {}  #   {(x, y): "dialogue_id"}
+        self.chests = chests or {}  # {(x, y): {"cols": int, "rows": int, "items": list}}
+        self.doors = doors or {}  # {(x, y): {"target": "location_id", "spawn": (x, y)}}
+        self.tile_changes = tile_changes or {}
 
         self.height = len(grid)
         self.width = max(len(row) for row in grid)
+
+    def set_scale(self, scale):
+        self.tile_size = max(1, int(round(self.base_tile_size * scale)))
 
     def is_walkable(self, x, y):    #   Принимаем координаты точки назначения
         if x < 0 or y < 0:
@@ -30,10 +38,82 @@ class GameMap:
         
         if x >= len(self.grid[y]):
             return False
-        return self.grid[y][x] == 2
+        return self.grid[y][x] in (2, 3, 4, 5)
+
+    def is_npc(self, x, y):
+        return self._tile_at(x, y) == 2
+
+    def is_chest(self, x, y):
+        return self._tile_at(x, y) == 3
+
+    def is_door(self, x, y):
+        return self._tile_at(x, y) == 4
+
+    def is_bonfire(self, x, y):
+        return self._tile_at(x, y) == 5
+
+    def _tile_at(self, x, y):
+        if x < 0 or y < 0:
+            return None
+
+        if x >= self.width or y >= self.height:
+            return None
+
+        if x >= len(self.grid[y]):
+            return None
+        return self.grid[y][x]
 
     def get_dialogue_id(self, x, y):
         return self.npc_dialogues.get((x, y))
+
+    def get_chest(self, x, y):
+        return self.chests.get((x, y))
+
+    def get_door(self, x, y):
+        return self.doors.get((x, y))
+
+    def _pack_points(self, data):
+        return {f"{x},{y}": copy.deepcopy(value) for (x, y), value in data.items()}
+
+    def _unpack_points(self, data):
+        result = {}
+        for key, value in data.items():
+            x, y = key.split(",", 1)
+            result[(int(x), int(y))] = copy.deepcopy(value)
+        return result
+
+    def to_state(self): #   Преобразование состояния комнаты в json для сохранение
+        return {
+            "grid": copy.deepcopy(self.grid),
+            "npc_dialogues": self._pack_points(self.npc_dialogues),
+            "chests": self._pack_points(self.chests),
+            "doors": self._pack_points(self.doors),
+        }
+
+    def load_state(self, state):    #   Обратное преобразование для загрузки
+        self.grid = copy.deepcopy(state["grid"])
+        self.npc_dialogues = self._unpack_points(state.get("npc_dialogues", {}))
+        self.chests = self._unpack_points(state.get("chests", {}))
+        self.doors = self._unpack_points(state.get("doors", {}))
+        self.height = len(self.grid)
+        self.width = max(len(row) for row in self.grid)
+
+    def change_tile(self, x, y, change_id):
+        change = self.tile_changes[change_id]
+        pos = (x, y)
+        tile = change["tile"]
+
+        self.grid[y][x] = tile
+        self.npc_dialogues.pop(pos, None)
+        self.chests.pop(pos, None)
+        self.doors.pop(pos, None)
+
+        if tile == 2:
+            self.npc_dialogues[pos] = change["dialogue"]
+        elif tile == 3:
+            self.chests[pos] = copy.deepcopy(change["chest"])
+        elif tile == 4:
+            self.doors[pos] = copy.deepcopy(change["door"])
 
     def get_adjacent_walkable(self, gx, gy):
         for dx, dy in [(0, 1), (0, -1), (-1, 0), (1, 0)]:
@@ -94,6 +174,13 @@ class GameMap:
                     pygame.draw.rect(screen, (60, 60, 60), rect, 1)
                 elif self.grid[y][x] == 3:
                     pygame.draw.rect(screen, (40, 200, 200), rect)
+                    pygame.draw.rect(screen, (60, 60, 60), rect, 1)
+                elif self.grid[y][x] == 4:
+                    pygame.draw.rect(screen, (90, 55, 25), rect)
+                    pygame.draw.rect(screen, (220, 180, 90), rect, 2)
+                elif self.grid[y][x] == 5:
+                    pygame.draw.rect(screen, (130, 30, 20), rect)
+                    pygame.draw.circle(screen, (255, 140, 40), rect.center, max(4, self.tile_size // 4))
                     pygame.draw.rect(screen, (60, 60, 60), rect, 1)
                 elif self.grid[y][x] == 1:
                     pygame.draw.rect(screen, (120, 120, 120), rect)

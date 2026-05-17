@@ -63,6 +63,105 @@ def draw_zfill_value(screen, font, value, cx, cy, digit_gap, color=(0, 0, 0)):  
     screen.blit(d1, (start_x + d0.get_width() + digit_gap, cy))
 
 
+class Scrollbar:
+    def __init__(
+        self,
+        track_rect,
+        scroll_speed,
+        min_thumb_height,
+        track_color=(10, 34, 14),
+        thumb_color=(29, 75, 31),
+        thumb_drag_color=(30, 127, 34),
+    ):
+        self.track_rect = track_rect
+        self.scroll_speed = scroll_speed
+        self.min_thumb_height = min_thumb_height
+        self.track_color = track_color
+        self.thumb_color = thumb_color
+        self.thumb_drag_color = thumb_drag_color
+
+        self.scroll_offset = 0
+        self.content_height = 0
+        self.visible_height = 0
+        self.thumb_visible_height = track_rect.height
+        self.max_scroll = 0
+        self.dragging = False
+        self.drag_start_y = 0
+        self.drag_start_offset = 0
+
+    def set_content(self, content_height, visible_height, thumb_visible_height=None, reset=False):
+        self.content_height = max(1, content_height)
+        self.visible_height = max(1, visible_height)
+        self.thumb_visible_height = max(1, thumb_visible_height or self.track_rect.height)
+        self.max_scroll = max(0, self.content_height - self.visible_height)
+        if reset:
+            self.scroll_offset = 0
+        else:
+            self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
+
+    def handle_scroll(self, dy):
+        if self.max_scroll == 0:
+            return
+        self.scroll_offset -= dy * self.scroll_speed
+        self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
+
+    def handle_mousedown(self, pos):
+        if self.max_scroll == 0:
+            return False
+
+        thumb_rect = self.get_thumb_rect()
+        if thumb_rect and thumb_rect.collidepoint(pos):
+            self.dragging = True
+            self.drag_start_y = pos[1]
+            self.drag_start_offset = self.scroll_offset
+            return True
+
+        if self.track_rect.collidepoint(pos):
+            ratio = (pos[1] - self.track_rect.y) / self.track_rect.height
+            self.scroll_offset = int(ratio * self.max_scroll)
+            self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
+            return True
+
+        return False
+
+    def handle_mouseup(self):
+        self.dragging = False
+
+    def handle_mousemotion(self, pos):
+        if not self.dragging or self.max_scroll == 0:
+            return
+
+        thumb_h = self.get_thumb_height()
+        drag_range = self.track_rect.height - thumb_h
+        if drag_range > 0:
+            dy = pos[1] - self.drag_start_y
+            self.scroll_offset = self.drag_start_offset + int(dy / drag_range * self.max_scroll)
+            self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
+
+    def get_thumb_height(self):
+        ratio = self.thumb_visible_height / self.content_height
+        return max(self.min_thumb_height, int(self.track_rect.height * ratio))
+
+    def get_thumb_rect(self):
+        if self.max_scroll == 0:
+            return None
+
+        thumb_h = self.get_thumb_height()
+        scroll_ratio = self.scroll_offset / self.max_scroll
+        thumb_y = self.track_rect.y + int(scroll_ratio * (self.track_rect.height - thumb_h))
+        return pygame.Rect(self.track_rect.x, thumb_y, self.track_rect.width, thumb_h)
+
+    def draw(self, screen):
+        if self.max_scroll == 0:
+            return
+
+        pygame.draw.rect(screen, self.track_color, self.track_rect)
+        thumb = self.get_thumb_rect()
+        if thumb:
+            color = self.thumb_drag_color if self.dragging else self.thumb_color
+            pygame.draw.rect(screen, color, thumb)
+
+
 class Selection:    #   Закрепление превью по клику. Общее для skills и inventory.
 
     def __init__(self):

@@ -1,10 +1,10 @@
 import pygame
 import os
 import json
-from settings import BASE_DIR
+from settings import BASE_DIR, SAVE_DIR
 from utils import (
     FONT_PATH, init_menu_base,
-    find_hovered, draw_hover_border, Selection, PreviewPanel, wrap_text,
+    find_hovered, draw_hover_border, Selection, PreviewPanel,
 )
 
 # Размер ячейки в натуральном разрешении menu.png
@@ -25,12 +25,14 @@ GRID_ROWS = 7
 GRID_START_X = 276
 GRID_START_Y = 200
 
-ITEMS_JSON = os.path.join(BASE_DIR, "items", "items.json")
+ITEMS_JSON = os.path.join(BASE_DIR, "items.json")
+SAVE_ITEMS_JSON = os.path.join(SAVE_DIR, "items.json")
 ICONS_DIR = os.path.join(BASE_DIR, "assets", "items")
 
 
 def load_items_catalog():
-    with open(ITEMS_JSON, "r", encoding="utf-8") as f:
+    path = SAVE_ITEMS_JSON if os.path.exists(SAVE_ITEMS_JSON) else ITEMS_JSON
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -167,18 +169,29 @@ class InventoryWindow:
     def _execute_action(self, action, slot_idx):
         if action == "drop":
             if slot_idx < len(self.player.inventory):
-                self.player.inventory.pop(slot_idx)
-                # Сбрасываем выделение если удалённый слот был выбран
+                self.player.inventory[slot_idx] = None
                 if self.selection.selected_idx == slot_idx:
                     self.selection.selected_idx = None
-                elif self.selection.selected_idx is not None and self.selection.selected_idx > slot_idx:
-                    self.selection.selected_idx -= 1
             return None
         if action == "use":
-            # Заглушка — в будущем вызов метода лечения
+            if slot_idx >= len(self.player.inventory):
+                return None
+
+            slot = self.player.inventory[slot_idx]
+            if slot is None:
+                return None
+
+            item = self.catalog.get(slot["id"])
+            if item and item.get("type") == "healing":
+                self.player.heal(item.get("heal_points", 1))
+                slot["count"] = slot.get("count", 1) - 1
+                if slot["count"] <= 0:
+                    self.player.inventory[slot_idx] = None
             return None
         if action == "inspect":
             slot = self.player.inventory[slot_idx]
+            if slot is None:
+                return None
             item = self.catalog.get(slot["id"])
             if item and item.get("dialogue"):
                 return {"action": "inspect", "dialogue_id": item["dialogue"]}
@@ -247,9 +260,6 @@ class InventoryWindow:
             self.selection.handle_click(self.cell_rects, self.drag_start_pos)
             self._open_context_menu(src)
         return None
-
-    def handle_click(self, pos):    #   Для совместимости (skills/quests вызывают handle_click)
-        return self.handle_mousedown(pos)
 
     def draw(self):
         self.screen.fill((0, 0, 0))

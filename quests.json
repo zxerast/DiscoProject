@@ -1,0 +1,44 @@
+{
+  "find_pass": {
+    "title": "найти пропуск",
+    "description": "получить пропуск, чтобы пройти мимо стражника.",
+    "group": "main",
+    "stages": [
+      {
+        "text": "поговорить со стражником",
+        "complete_flag": "find_pass_stage_1"
+      },
+      {
+        "text": "получить пропуск у начальника",
+        "complete_flag": "find_pass_stage_2"
+      },
+      {
+        "text": "вернуться к стражнику",
+        "complete_flag": "find_pass_stage_3"
+      }
+    ],
+    "xp_reward": 30
+  },
+
+  "find_map": {
+    "title": "найти карту",
+    "description": "получить пропуск, чтобы пройти мимо стражника.",
+    "group": "main",
+    "stages": [
+      {
+        "text": "поговорить со стражником",
+        "complete_flag": "find_map_stage_1"
+      },
+      {
+        "text": "получить пропуск у начальника",
+        "complete_flag": "find_map_stage_2"
+      },
+      {
+        "text": "вернуться к стражнику",
+        "complete_flag": "find_map_stage_3"
+      }
+    ],
+    "xp_reward": 50
+  }
+}
+

@@ -1,7 +1,7 @@
 import pygame
 import os
 import random
-from settings import get_scale, BASE_DIR
+from settings import get_uniform_scale, BASE_DIR
 from skills import SKILL_DISPLAY_NAMES
 from utils import FONT_PATH
 
@@ -38,9 +38,9 @@ class SkillCheck:
             self.final_states.append(img)
 
         # Масштаб кубика
-        scale_x, scale_y = get_scale(screen)
-        self.width = int(DICE_BASE_W * scale_x)
-        self.height = int(DICE_BASE_H * scale_y)
+        scale = get_uniform_scale(screen)
+        self.width = int(DICE_BASE_W * scale)
+        self.height = int(DICE_BASE_H * scale)
 
         # Масштабируем все кадры
         self.frames = [
@@ -63,7 +63,6 @@ class SkillCheck:
         self.overlay.fill((0, 0, 0, 150))
 
         # Шрифт для числа на кубике
-        scale = min(scale_x, scale_y)
         self.font = pygame.font.Font(FONT_PATH, int(42 * scale))
 
         # Шрифты для надписей над/под кубиком

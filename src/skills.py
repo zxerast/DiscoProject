@@ -60,6 +60,11 @@ SKILL_ICON_POSITIONS = [
     (610, 809), (728, 809), (846, 809), (964, 809), (1082, 809),
 ]
 
+# Центр маленького квадрата с числовым значением навыка
+# относительно левого верхнего угла иконки.
+SKILL_VALUE_CENTER_X = 99
+SKILL_VALUE_CENTER_Y = 139
+
 # Координаты счётчиков основных атрибутов (в системе menu.png)
 # Между кнопками +/- для каждой группы
 ATTR_VAL_X = 548
@@ -314,7 +319,12 @@ class SkillsWindow:
             skill_name = SKILL_NAMES[i]
             skill_val = self.player.skills.get(skill_name, 0)
             val_surf = self.skill_value_font.render(str(skill_val), True, (0, 0, 0))
-            val_rect = val_surf.get_rect(centerx=rect.centerx + 30, top=rect.bottom - 20)
+            val_rect = val_surf.get_rect(
+                center=(
+                    rect.x + int(SKILL_VALUE_CENTER_X * self.size),
+                    rect.y + int(SKILL_VALUE_CENTER_Y * self.size),
+                ),
+            )
             self.screen.blit(val_surf, val_rect)
 
             if i == hovered_idx or i == self.selection.selected_idx:
@@ -329,4 +339,3 @@ class SkillsWindow:
                 name=display_name,
                 value=curr_val,
             )
-
