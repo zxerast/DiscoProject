@@ -11,7 +11,7 @@ grid = [
 ]
 
 doors = {
-    (0, 1): {"target": "awaken_chamber", "spawn": (13, 4)},
+    (0, 1): {"target": "test", "spawn": (14, 1)},
 }
 
 room = GameMap(grid, doors=doors)

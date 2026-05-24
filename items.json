@@ -1,26 +1,9 @@
 {
-  "old_pass": {
-    "name": "Старый пропуск",
-    "description": "Потрёпанный бумажный пропуск с печатью ратуши. Чернила почти выцвели.",
-    "icon": "old_pass.png",
+  "crowbar": {
+    "name": "Монтировка",
+    "description": "Старая ржавая монтировка. Когда-то один физик ядерщик с помощью подобной спас человечество от инопланетного вторжения",
+    "icon": "crowbar.png",
     "stackable": false,
-    "type": "inspect",
-    "dialogue": "old_pass"
-  },
-  "apple": {
-    "name": "Яблоко",
-    "description": "Сочное красное яблоко. Немного помятое, но вполне съедобное.",
-    "icon": "apple.png",
-    "stackable": true,
-    "type": "healing",
-    "heal_points": 1
-  },
-  "book": {
-    "name": "Книга",
-    "description": "Древняя рукопись о войне Русов и Ящеров",
-    "icon": "book.png",
-    "stackable": false,
-    "type": "inspect",
-    "dialogue": "book"
+    "type": "quest"
   }
 }

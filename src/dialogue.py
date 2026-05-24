@@ -181,7 +181,7 @@ class DialogueWindow:
                     self.current_portrait = self._load_portrait(check.get("portrait"))
 
                     # Кнопка после текст проверки — из option_text самой проверки
-                    btn_text = check.get("option_text", "Продолжить")
+                    btn_text = check.get("option_text", ">_")
 
                     if check.get("success_node"):
                         # Следующий клик уведёт в ветку
@@ -212,6 +212,8 @@ class DialogueWindow:
                 damage = opt.get("damage_on_failure", 0)
                 if damage:
                     self.player.take_damage(damage)
+
+                self._apply_option_effects(opt)
 
                 if "change_to" in opt:
                     self.active = False
@@ -274,6 +276,59 @@ class DialogueWindow:
                 if isinstance(flag, str):
                     self.player.set_flag(flag)
 
+    def _remove_flags(self, flags):
+        if not flags:
+            return
+        if isinstance(flags, str):
+            self.player.flags.pop(flags, None)
+            return
+        if isinstance(flags, list):
+            for flag in flags:
+                if isinstance(flag, str):
+                    self.player.flags.pop(flag, None)
+
+    def _remove_item(self, item_data):
+        if isinstance(item_data, str):
+            item_id = item_data
+            count = 1
+        elif isinstance(item_data, dict):
+            item_id = item_data.get("id")
+            count = item_data.get("count", 1)
+        else:
+            return
+
+        if not item_id:
+            return
+
+        remaining = max(1, int(count))
+        for idx, slot in enumerate(self.player.inventory):
+            if remaining <= 0:
+                break
+            if not slot or slot.get("id") != item_id:
+                continue
+
+            slot_count = slot.get("count", 1)
+            if slot_count > remaining:
+                slot["count"] = slot_count - remaining
+                remaining = 0
+            else:
+                remaining -= slot_count
+                self.player.inventory[idx] = None
+
+    def _remove_items(self, items):
+        if not items:
+            return
+        if isinstance(items, (str, dict)):
+            self._remove_item(items)
+            return
+        if isinstance(items, list):
+            for item in items:
+                self._remove_item(item)
+
+    def _apply_option_effects(self, opt):
+        self._remove_flags(opt.get("remove_flag"))
+        self._remove_items(opt.get("remove_item"))
+
     def set_node(self, node_id):
         node = self.dialogue_data[node_id]
         self.current_node_id = node_id
@@ -306,8 +361,8 @@ class DialogueWindow:
 
         if self.passive_queue:
             self.passive_state = "continue"
-            self.option_data = [{"text": "Продолжить", "next": None}]
-            self.options = ["Продолжить"]
+            self.option_data = [{"text": ">_", "next": None}]
+            self.options = [">_"]
             self._build_option_rects()
             return
 

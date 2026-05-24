@@ -16,10 +16,10 @@ PLAYER_HEIGHT = 160
 
 class Player:
     def __init__(self, game_map, screen, save_path=SAVE_PATH):
-        self.save_path = save_path
-        self.game_map = game_map
+        self.save_path = save_path  #   Данные об игроке
+        self.game_map = game_map    #   Загруженная карта
 
-        scale = get_uniform_scale(screen)
+        scale = get_uniform_scale(screen)   #   Скейлим игрока
 
         self.width = int(PLAYER_WIDTH * scale)
         self.height = int(PLAYER_HEIGHT * scale)
@@ -39,14 +39,14 @@ class Player:
             self.walking_down.append(pygame.transform.scale(pygame.image.load(os.path.join(base, "assets", "down", frame)).convert_alpha(), (self.width, self.height)))
             self.walking_right.append(pygame.transform.scale(pygame.transform.flip(pygame.image.load(os.path.join(base, "assets", "left", frame)).convert_alpha(), True, False), (self.width, self.height)))
 
-        self.direction = self.walking_down
+        self.direction = self.walking_down  #   По умолчанию смотрим вниз
         self.current_frame = 0
         self.animation_speed = 0.1
         self.image = self.direction[0]
         self.rect = self.image.get_rect()   #   Создаём прямоугольник для персонажа
         self.rect.midbottom = (0, game_map.tile_size // 2)  #   Позиция ниже загрузится из сохранения
 
-        self.path = []
+        self.path = []  #   Путь движения игрока
         self.is_moving = False
 
         # Загружаем состояние из JSON
@@ -63,7 +63,7 @@ class Player:
         self.skills = data["skills"]
         self.flags = data.get("flags", {})
         self.inventory = data.get("inventory", [])
-        self.location = data.get("location", "test")
+        self.location = data.get("location", "awaken_chamber")
 
         # Позиция из сейва (перезаписывает аргументы __init__)
         self.grid_x = data["position"]["grid_x"]
@@ -94,83 +94,84 @@ class Player:
         with open(self.save_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)    #   Сохраняемся дампя всё собранное 
 
-    def set_flag(self, flag_name, value=True):
+    def set_flag(self, flag_name, value=True):  #   Ставим флаг состояния игрока, история его действий
         self.flags[flag_name] = value
-        if value is True and flag_name.endswith("_completed"):
-            self.normalize_completed_quest_stage_flag(flag_name)
-        if value is True:
-            self.normalize_quest_stage_flags(flag_name)
-            self.award_completed_quest_xp()
 
-    def complete_quest_stage(self, stage_flag):
-        self.flags.pop(stage_flag, None)
-        self.flags[f"{stage_flag}_completed"] = True
+        if value is not True:
+            return
 
-    def _parse_quest_stage_flag(self, flag_name):
-        if flag_name.endswith("_completed") or "_stage_" not in flag_name:
+        parsed = self._parse_stage_flag(flag_name)  #   Нужно понять является ли флаг стадией квеста
+
+        if parsed and parsed["completed"]:
+            prefix = parsed["prefix"]
+            completed_stage_num = parsed["stage_num"]
+            active_flag = parsed["active_flag"]
+
+            self.flags.pop(active_flag, None)   #   Убираем флаг текущей стадии
+
+            for stage_num in range(1, completed_stage_num): #   Всем стадиям до неё приписываем completed
+                previous_flag = f"{prefix}{stage_num}"
+                self.flags.pop(previous_flag, None)
+                self.flags[f"{previous_flag}_completed"] = True
+
+        self._normalize_quest_stages(flag_name) #   Если мы просто поставили флаг новой стадии то предыдущие нужно завершить
+        self.award_completed_quest_xp()
+
+
+    def _parse_stage_flag(self, flag_name):
+        completed = False
+        active_flag = flag_name
+
+        if flag_name.endswith("_completed"):    #   completed всегда стоит у завершения стадии квеста
+            completed = True
+            active_flag = flag_name[:-10]
+
+        if "_stage_" not in active_flag:    #   Обычный флаг не стадия квеста
             return None
 
-        prefix, stage_num = flag_name.rsplit("_stage_", 1)
+        prefix, stage_num = active_flag.rsplit("_stage_", 1)    #   Берём номер стадии
+
         if not stage_num.isdigit():
             return None
 
-        return f"{prefix}_stage_", int(stage_num)
+        return {
+            "prefix": f"{prefix}_stage_",
+            "stage_num": int(stage_num),
+            "active_flag": active_flag,
+            "completed_flag": f"{active_flag}_completed",
+            "completed": completed,
+        }
 
-    def _parse_completed_quest_stage_flag(self, flag_name):
-        if not flag_name.endswith("_completed"):
-            return None
 
-        active_flag = flag_name[:-10]
-        parsed = self._parse_quest_stage_flag(active_flag)
-        if not parsed:
-            return None
+    def _normalize_quest_stages(self, changed_flag=None):
+        prefixes = set()    
+        parsed = self._parse_stage_flag(changed_flag)   #   Берём  множество префиксов активных стадий квеста
+        if parsed:
+            prefixes.add(parsed["prefix"])
 
-        return parsed[0], parsed[1], active_flag
-
-    def normalize_completed_quest_stage_flag(self, completed_flag):
-        parsed = self._parse_completed_quest_stage_flag(completed_flag)
-        if not parsed:
-            return
-
-        prefix, completed_stage_num, active_flag = parsed
-        self.flags.pop(active_flag, None)
-
-        for stage_num in range(1, completed_stage_num):
-            previous_flag = f"{prefix}{stage_num}"
-            self.flags.pop(previous_flag, None)
-            self.flags[f"{previous_flag}_completed"] = True
-
-    def normalize_quest_stage_flags(self, changed_flag=None):
-        parsed_changed = self._parse_quest_stage_flag(changed_flag) if changed_flag else None
-        if parsed_changed:
-            prefixes = {parsed_changed[0]}
-        else:
-            prefixes = set()
-            for flag_name, value in self.flags.items():
-                if value is not True:
-                    continue
-                parsed = self._parse_quest_stage_flag(flag_name)
-                if parsed:
-                    prefixes.add(parsed[0])
-
-        for prefix in prefixes:
+        for prefix in prefixes:     #   В каждой активной стадии
             active_stages = []
-            for flag_name, value in self.flags.items():
+
+            for flag_name, value in self.flags.items(): #   Смотрим установленные флаги
                 if value is not True:
                     continue
-                parsed = self._parse_quest_stage_flag(flag_name)
-                if parsed and parsed[0] == prefix:
-                    active_stages.append((parsed[1], flag_name))
 
-            if len(active_stages) < 2:
+                parsed = self._parse_stage_flag(flag_name)
+
+                if parsed and not parsed["completed"] and parsed["prefix"] == prefix:   #   Добавляем новый флаг
+                    active_stages.append((parsed["stage_num"], flag_name))
+
+            if len(active_stages) < 2:  #   Если только одна активная стадия то ничё не делаем всё ок
                 continue
 
-            latest_stage_num = max(stage_num for stage_num, _flag_name in active_stages)
-            for stage_num, flag_name in active_stages:
-                if stage_num < latest_stage_num:
-                    self.complete_quest_stage(flag_name)
+            latest_stage_num = max(stage_num for stage_num, _ in active_stages) #   А если стало вдруг больше
 
-    def get_flag(self, flag_name):
+            for stage_num, flag_name in active_stages:  #   То оставляем только последнюю, остальные завершаем
+                if stage_num < latest_stage_num:
+                    self.flags.pop(flag_name, None)
+                    self.flags[f"{flag_name}_completed"] = True
+
+    def get_flag(self, flag_name):      #   Получить имя флага из списка
         return self.flags.get(flag_name, False)
 
     def get_skill(self, skill_name):    #   Получить значение скилла по имени
@@ -182,15 +183,16 @@ class Player:
                 return attr_idx
         return -1
 
-    def _load_quests_catalog(self):
+    def award_completed_quest_xp(self): #   Выдаём XP за выполнение квеста
         path = SAVE_QUESTS_PATH if os.path.exists(SAVE_QUESTS_PATH) else QUESTS_PATH
-        if not os.path.exists(path):
-            return {}
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
 
-    def award_completed_quest_xp(self):
-        for quest_id, quest in self._load_quests_catalog().items():
+        if not os.path.exists(path):
+            return
+
+        with open(path, "r", encoding="utf-8") as f:
+            quests = json.load(f)
+
+        for quest_id, quest in quests.items():
             reward_flag = f"{quest_id}_xp_awarded"
             if self.flags.get(reward_flag):
                 continue
@@ -213,15 +215,15 @@ class Player:
             self.xp_cap += 25
 
     def get_max_health(self):
-        return max(1, self.get_skill("fortitude"))
+        return max(1, self.get_skill("fortitude"))  #   За здоровье отвечает скилл Стойкость
 
     def take_damage(self, damage=1):
-        self.health_points = max(0, self.health_points - damage)
+        self.health_points -= damage
 
     def heal(self, heal_points):
         self.health_points = min(self.get_max_health(), self.health_points + heal_points)
 
-    def set_map_position(self, game_map, grid_x, grid_y, location=None):
+    def set_map_position(self, game_map, grid_x, grid_y, location=None):    #   Устанавливаем корды в тайлах 
         self.game_map = game_map
         self.grid_x = grid_x
         self.grid_y = grid_y
@@ -256,7 +258,7 @@ class Player:
             self.image = self.direction[0]
             return
 
-        next_gx, next_gy = self.path[0]     #   Вторая клетка - начало пути
+        next_gx, next_gy = self.path[0]     #   Вторая клетка - следующая цель пути
         self.target_x, self.target_y = self.game_map.grid_to_pixel_center(next_gx, next_gy) #Обратно переводим корды конца в пиксели т.к перс движется по пикселям
         self.is_moving = True
 
@@ -273,7 +275,7 @@ class Player:
             self.direction = self.walking_right
 
     def update(self):
-        if not self.is_moving:
+        if not self.is_moving:  #   Здешний update работает только когда персонаж двигается
             return
 
         dx = self.target_x - self.x #   Расстояние по x и y в пикселях до цели

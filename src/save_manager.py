@@ -58,7 +58,7 @@ def load_rooms_state(rooms):
             rooms[location_id].load_state(room_state)   #   map -> методы для преобразования из JSON в py
 
 
-def get_saved_location(default="test"):         #   Берём послднюю сохранённую локацию перса
+def get_saved_location(default="awaken_chamber"):         #   Берём послднюю сохранённую локацию перса
     if not os.path.exists(SAVE_PLAYER_PATH):
         return default
 

@@ -18,5 +18,7 @@
     },
     "location": "test",
     "inventory": [],
-    "flags": {}
+    "flags": {
+        "do_not_know_about_door": true
+    }
 }

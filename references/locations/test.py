@@ -1,4 +1,11 @@
+import os
+
 from map import GameMap
+from settings import BASE_DIR
+
+
+ROOM_BACKGROUND = os.path.join(BASE_DIR, "assets", "locations", "awaken_chamber.png")
+ROOM_BACKGROUND_SIZE = (1672, 941)
 
 grid = [
     [1, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -27,6 +34,7 @@ chests = {
     (9, 2): {
         "cols": 3,
         "rows": 2,
+        "set_flag_on_take": "hasPass",
         "items": [
             {"id": "apple", "count": 2},
             {"id": "book", "count": 1},
@@ -50,6 +58,7 @@ tile_changes = {
         "chest": {
             "cols": 2,
             "rows": 1,
+            "set_flag_on_take": "hasPass",
             "items": [
                 {"id": "old_pass", "count": 1},
             ],
@@ -61,4 +70,14 @@ tile_changes = {
     },
 }
 
-room = GameMap(grid, npc_dialogues=npc_dialogues, chests=chests, doors=doors, tile_changes=tile_changes)
+room = GameMap(
+    grid,
+    npc_dialogues=npc_dialogues,
+    chests=chests,
+    doors=doors,
+    tile_changes=tile_changes,
+    background_image=ROOM_BACKGROUND,
+    background_size=ROOM_BACKGROUND_SIZE,
+    show_tiles=True,
+    tile_alpha=110,
+)
