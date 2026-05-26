@@ -1,0 +1,54 @@
+{
+    "level": 1,
+    "skill_points": 0,
+    "HP": 1,
+    "XP": 0,
+    "XP_cap": 25,
+    "attributes": [
+        1,
+        1,
+        4,
+        4,
+        3
+    ],
+    "skills": {
+        "fortitude": 1,
+        "endurance": 1,
+        "musculature": 1,
+        "close_combat": 1,
+        "survival": 1,
+        "balance": 1,
+        "initiative": 1,
+        "lock_picking": 1,
+        "theft": 1,
+        "accuracy": 1,
+        "logic": 4,
+        "knowledge": 4,
+        "technology": 4,
+        "short_memory": 4,
+        "analysis": 4,
+        "empathy": 4,
+        "authority": 4,
+        "persuation": 4,
+        "fear": 4,
+        "volition": 4,
+        "vision": 3,
+        "scent": 3,
+        "hearing": 3,
+        "tactility": 3,
+        "intuition": 3
+    },
+    "position": {
+        "grid_x": 4,
+        "grid_y": 4
+    },
+    "location": "awaken_chamber",
+    "inventory": [],
+    "flags": {
+        "find_way_out_stage_1": true,
+        "do_not_know_about_door": true,
+        "not_convinced_robot_yet": true,
+        "do_not_know_comp_code": true,
+        "initial_skill_setup_done": true
+    }
+}

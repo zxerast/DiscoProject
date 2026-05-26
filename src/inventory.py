@@ -169,6 +169,21 @@ class InventoryWindow:
     def _execute_action(self, action, slot_idx):
         if action == "drop":
             if slot_idx < len(self.player.inventory):
+                slot = self.player.inventory[slot_idx]
+                flags = slot.get("set_flag_on_take")
+                if not flags:
+                    self.player.inventory[slot_idx] = None
+                    if self.selection.selected_idx == slot_idx:
+                        self.selection.selected_idx = None
+                    return
+
+                if isinstance(flags, str):
+                    self.player.flags.pop(flags, None)
+                elif isinstance(flags, list):
+                    for flag in flags:
+                        if isinstance(flag, str):
+                            self.player.flags.pop(flag, None)
+
                 self.player.inventory[slot_idx] = None
                 if self.selection.selected_idx == slot_idx:
                     self.selection.selected_idx = None

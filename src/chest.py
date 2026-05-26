@@ -91,8 +91,8 @@ class ChestWindow:
 
         return False
 
-    def _set_flags_on_take(self):
-        flags = self.chest.get("set_flag_on_take")
+    def _set_flags_on_take(self, slot):
+        flags = slot.get("set_flag_on_take")
         if not flags:
             return
 
@@ -109,7 +109,7 @@ class ChestWindow:
             return
 
         if self._add_to_inventory(slot):
-            self._set_flags_on_take()
+            self._set_flags_on_take(slot)
             self.items[slot_idx] = None
             if self.selected_idx == slot_idx:
                 self.selected_idx = None

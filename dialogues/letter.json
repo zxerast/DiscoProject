@@ -1,0 +1,14 @@
+{
+  "npc_name": "...",
+  "entry": [
+    {"node": "start"}
+  ],
+
+
+  "start": {
+    "text": "...",
+    "options": [
+      {"text": ">_", "next": null}
+    ]
+  }
+}
