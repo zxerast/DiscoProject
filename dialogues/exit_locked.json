@@ -1,5 +1,6 @@
 {
   "npc_name": "Металлическая дверь",
+  "portrait": "intercom",
   "entry": [
     {"node": "broken_start", "flag": "broke_crowbar"},
     {"node": "saved_start", "flag": "almost_break_crowbar"},
@@ -9,8 +10,8 @@
 
 
   "start": {
-    "text": "Перед тобой возвышается старая металлическая раздвижная дверь. Сбоку виднеется панель с тремя кнопками.",
-    "set_flag": ["viewed_door", "find_way_out_stage_1_completed", "find_way_out_stage_2"],
+    "text": "Перед тобой возвышается старая металлическая раздвижная дверь. Сбоку виднеется панель с двумя кнопками.",
+    "set_flag": ["viewed_door", "find_way_out_stage_1_completed", "find_way_out_stage_2", "force_breakout_stage_1"],
     "passive_checks": [
       {
         "skill": "technology",
@@ -139,7 +140,7 @@
   },
   "break_success_5": {
     "text": "За дверью устилается длинный тёмный коридор, без единой души. Выход явно пока не здесь, необходимо двигаться дальше",
-    "set_flag": "find_way_out_stage_2_completed",
+    "set_flag": ["find_way_out_stage_2_completed", "force_breakout_stage_2_completed"],
     "options": [
         {
             "text": "Убрать монтировку", "next": null,
@@ -184,7 +185,7 @@
 
   "break_crowbar": {
     "text": "Резкий щелчок пронзил воздушную гладь. Ставни с неимоверным грохотом схлопываются. У тебя в руках остался лишь погнутый осколок былого инструмента",
-    "set_flag": "broke_crowbar",
+    "set_flag": ["broke_crowbar", "force_breakout_stage_2_completed"],
     "passive_checks": [
       {
         "skill": "lock_picking",

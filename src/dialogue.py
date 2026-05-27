@@ -8,7 +8,7 @@ ASSETS_PATH = os.path.join(BASE_DIR, "assets", "dialogue_window")
 DIALOGUES_PATH = os.path.join(BASE_DIR, "dialogues")
 SAVE_DIALOGUES_PATH = os.path.join(SAVE_DIR, "dialogues")
 SKILLS_PATH = os.path.join(BASE_DIR, "assets", "skills")
-
+PORTRAIT_PATH = os.path.join(BASE_DIR, "assets", "portraits")
 
 def load_dialogue(dialogue_id):
     save_path = os.path.join(SAVE_DIALOGUES_PATH, f"{dialogue_id}.json")
@@ -81,7 +81,7 @@ class DialogueWindow:
         self.portrait_y = int(348 * self.portrait_scale)
 
         # Заглушка портрета NPC
-        self.npc_portrait = self._build_npc_placeholder(dialogue_data.get("npc_name", "???"))
+        self.npc_portrait = self._build_npc_placeholder(dialogue_data.get("portrait", "???"))
 
         self.dialogue_data = dialogue_data  #   Дерево текущего диалога
         self.player = player
@@ -244,17 +244,14 @@ class DialogueWindow:
                     return rule["node"]
         return "start"
 
-    def _build_npc_placeholder(self, npc_name): #   Создаёт заглушку портрета NPC — серый прямоугольник с именем."""
-        surf = pygame.Surface((self.portrait_w, self.portrait_h), pygame.SRCALPHA)
-        surf.fill((60, 55, 50, 200))
-        # Рамка
-        pygame.draw.rect(surf, (120, 110, 100), surf.get_rect(), 2)
-        # Имя NPC по центру
-        label = self.font.render(npc_name, True, (200, 190, 170))
-        lx = (self.portrait_w - label.get_width()) // 2
-        ly = (self.portrait_h - label.get_height()) // 2
-        surf.blit(label, (lx, ly))
-        return surf
+    def _build_npc_placeholder(self, npc_portrait): #   Создаёт заглушку портрета NPC — серый прямоугольник с именем."""
+        if not npc_portrait:
+            return None
+        path = os.path.join(PORTRAIT_PATH, f"{npc_portrait}.png")
+        if not os.path.exists(path):
+            return None
+        raw = pygame.image.load(path).convert_alpha()
+        return pygame.transform.scale(raw, (self.portrait_w, self.portrait_h))
 
     def _load_portrait(self, skill_name):   #   Загружает и масштабирует портрет навыка из assets/skills/.
         if not skill_name:

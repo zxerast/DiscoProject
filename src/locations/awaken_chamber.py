@@ -11,7 +11,7 @@ ROOM_BACKGROUND_SIZE = (1664, 960)
 ROOM_LAYERS = [
     {"image": os.path.join(ROOM_ASSET_DIR, "barrel.png"), "x": 185, "y_offset": 694, "tile": (4, 12), "approach": (4, 13)},
     {"image": os.path.join(ROOM_ASSET_DIR, "computer_interaction.png"), "x": 1305, "y_offset": 373, "tile": (19, 7), "approach": (20, 6)},
-    {"image": os.path.join(ROOM_ASSET_DIR, "cryo_cam_interaction.png"), "x": 224, "y_offset": 336, "tile": (3, 7), "approach": (4, 8)},
+#    {"image": os.path.join(ROOM_ASSET_DIR, "cryo_cam_interaction.png"), "x": 224, "y_offset": 336, "tile": (3, 7), "approach": (4, 8)},
     {"image": os.path.join(ROOM_ASSET_DIR, "door_interaction.png"), "x": 690, "y_offset": 76, "tile": (13, 3), "approach": (13, 4)},
     {"image": os.path.join(ROOM_ASSET_DIR, "our_camera.png"), "x": 165, "y_offset": 76, "tile": (3, 3), "approach": (3, 4)},
 ]
@@ -43,7 +43,7 @@ npc_dialogues = {
     (13, 3): "exit_locked",
     (19, 7): "computer",
     (3, 3): "our_camera",
-    (3, 7): "another_camera"
+#    (3, 7): "another_camera"
 }
 
 chests = {
@@ -51,7 +51,7 @@ chests = {
         "cols": 3,
         "rows": 2,
         "items": [
-            {"id": "crowbar", "count": 1, "set_flag_on_take": "has_crowbar"},
+            {"id": "crowbar", "count": 1, "set_flag_on_take": ["has_crowbar", "force_breakout_stage_1_completed", "force_breakout_stage_2"]},
             {"id": "medkit", "count": 3},
             {"id": "casette", "count": 1, "set_flag_on_take": "has_casette"},
             {"id": "letter", "count": 1},

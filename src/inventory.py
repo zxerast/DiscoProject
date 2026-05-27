@@ -28,6 +28,7 @@ GRID_START_Y = 200
 ITEMS_JSON = os.path.join(BASE_DIR, "items.json")
 SAVE_ITEMS_JSON = os.path.join(SAVE_DIR, "items.json")
 ICONS_DIR = os.path.join(BASE_DIR, "assets", "items")
+PREVIEW_DIR = os.path.join(BASE_DIR, "assets", "portraits")
 
 
 def load_items_catalog():
@@ -111,7 +112,7 @@ class InventoryWindow:
         item = self.catalog.get(item_id)
         if not item:
             return None
-        icon_path = os.path.join(ICONS_DIR, item["icon"])
+        icon_path = os.path.join(PREVIEW_DIR, item["icon"])
         if not os.path.exists(icon_path):
             return None
         raw = pygame.image.load(icon_path).convert_alpha()

@@ -19,9 +19,6 @@
     "location": "awaken_chamber",
     "inventory": [],
     "flags": {
-        "find_way_out_stage_1": true,
-        "do_not_know_about_door": true,
-        "not_convinced_robot_yet": true,
-        "do_not_know_comp_code": true
+        "find_way_out_stage_1": true
     }
 }

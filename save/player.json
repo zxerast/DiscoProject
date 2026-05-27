@@ -7,9 +7,9 @@
     "attributes": [
         1,
         1,
-        4,
-        4,
-        3
+        9,
+        1,
+        1
     ],
     "skills": {
         "fortitude": 1,
@@ -22,21 +22,21 @@
         "lock_picking": 1,
         "theft": 1,
         "accuracy": 1,
-        "logic": 4,
-        "knowledge": 4,
-        "technology": 4,
-        "short_memory": 4,
-        "analysis": 4,
-        "empathy": 4,
-        "authority": 4,
-        "persuation": 4,
-        "fear": 4,
-        "volition": 4,
-        "vision": 3,
-        "scent": 3,
-        "hearing": 3,
-        "tactility": 3,
-        "intuition": 3
+        "logic": 9,
+        "knowledge": 9,
+        "technology": 9,
+        "short_memory": 9,
+        "analysis": 9,
+        "empathy": 1,
+        "authority": 1,
+        "persuation": 1,
+        "fear": 1,
+        "volition": 1,
+        "vision": 1,
+        "scent": 1,
+        "hearing": 1,
+        "tactility": 1,
+        "intuition": 1
     },
     "position": {
         "grid_x": 4,
@@ -46,9 +46,6 @@
     "inventory": [],
     "flags": {
         "find_way_out_stage_1": true,
-        "do_not_know_about_door": true,
-        "not_convinced_robot_yet": true,
-        "do_not_know_comp_code": true,
         "initial_skill_setup_done": true
     }
 }

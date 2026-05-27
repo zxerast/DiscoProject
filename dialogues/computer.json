@@ -1,5 +1,6 @@
 {
   "npc_name": "Старый терминал",
+  "portrait": "computer",
   "entry": [
     {"node": "main_menu", "flag": "comp_is_on"},
     {"node": "boot_screen_failed", "flag": "comp_hack_failed"},

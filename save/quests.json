@@ -16,7 +16,7 @@
     "xp_reward": 100
   },
 
-  "find_map": {
+  "find_personality": {
     "title": "Амнезия",
     "description": "Кто ты? Кем ты был раньше? Откуда ты? Это всё покрыто мраком тайны, даже для тебя самого.",
     "group": "side",
@@ -35,6 +35,25 @@
       }
     ],
     "xp_reward": 50
+  },
+
+  "force_breakout": {
+    "title": "Открывашка",
+    "description": "Как открыть железную дверь? Легко, достаточно найти нужный инструмент и приложить капельку усилий.",
+    "group": "side",
+    "stages": [
+      {
+        "text": "Найти чем открыть дверь",
+        "complete_flag": "force_breakout_stage_1"
+      },
+      {
+        "text": "Открыть дверь с помощью монтировки",
+        "complete_flag": "force_breakout_stage_2"
+      }
+    ],
+    "xp_reward": 50
   }
 }
+
+
 

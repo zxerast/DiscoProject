@@ -383,8 +383,7 @@
         "npc_dialogues": {
             "13,3": "exit_locked",
             "19,7": "computer",
-            "3,3": "our_camera",
-            "3,7": "another_camera"
+            "3,3": "our_camera"
         },
         "chests": {
             "4,12": {
@@ -394,7 +393,11 @@
                     {
                         "id": "crowbar",
                         "count": 1,
-                        "set_flag_on_take": "has_crowbar"
+                        "set_flag_on_take": [
+                            "has_crowbar",
+                            "force_breakout_stage_1_completed",
+                            "force_breakout_stage_2"
+                        ]
                     },
                     {
                         "id": "medkit",
