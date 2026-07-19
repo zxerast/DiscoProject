@@ -1,7 +1,7 @@
 import pygame
 import os
 import json
-from settings import get_uniform_scale, BASE_DIR, SAVE_DIR
+from settings import BASE_DIR, SAVE_DIR
 from utils import wrap_text, FONT_PATH, Scrollbar
 
 ASSETS_PATH = os.path.join(BASE_DIR, "assets", "dialogue_window")
@@ -22,63 +22,64 @@ COLOR_OPTION_HOVER = (255, 240, 200)
 COLOR_OPTION_BG = (40, 35, 30, 0)
 COLOR_OPTION_BG_HOVER = (60, 50, 40, 0)
 
+ANSWER_FONT_SIZE = 14
+QUESTION_FONT_SIZE = 14
+
 
 class DialogueWindow:
     def __init__(self, screen, dialogue_data, player, node_id=None):
         self.screen = screen
         sw, sh = screen.get_size()
-        scale = get_uniform_scale(screen)
 
         raw = pygame.image.load(os.path.join(ASSETS_PATH, "window.png")).convert_alpha()
 
-        w = sw - int(200 * scale)
+        w = sw
         h = int(raw.get_height() * w / raw.get_width())
+        ui_scale = w / raw.get_width()
 
         self.image = pygame.transform.scale(raw, (w, h))
 
-        self.rect = self.image.get_rect(midbottom=(sw // 2, sh - scale))   # Расположение окна диалога
+        self.rect = self.image.get_rect(midbottom=(sw // 2, sh))   # Расположение окна диалога
 
-        self.font = pygame.font.Font(FONT_PATH, int(22 * scale))  # Текст ответа
-        self.option_font = pygame.font.Font(FONT_PATH, int(20 * scale))   # Текст вопросов
+        self.font = pygame.font.Font(FONT_PATH, int(ANSWER_FONT_SIZE * ui_scale))  # Текст ответа
+        self.option_font = pygame.font.Font(FONT_PATH, int(QUESTION_FONT_SIZE * ui_scale))   # Текст вопросов
 
-        # Область текста NPC (все значения для базового 1366x768, масштабируются)
-        self.text_offset_x = int(280 * scale)
-        self.text_offset_y = int(290 * scale)
-        self.text_width = self.rect.width - int(640 * scale)
-        self.text_line_height = int(28 * scale)
+        # Область текста NPC (координаты для спрайта window.png 960x192)
+        self.text_offset_x = int(150 * ui_scale)
+        self.text_offset_y = int(33 * ui_scale)
+        self.text_width = int(316 * ui_scale)
+        self.text_line_height = int(16 * ui_scale)
 
         # Область кнопок ответов
-        self.options_offset_x = int(850 * scale)
-        self.options_offset_y = int(290 * scale)
-        self.options_width = self.rect.width - int(930 * scale)
-        self.option_line_height = int(24 * scale)
-        self.option_padding_y = int(6 * scale)
-        self.button_gap = int(8 * scale)
-        self.option_text_pad_x = int(12 * scale)
-        self.option_wrap_pad = int(24 * scale)
-        self.options_clip_y = int(270 * scale)    # Верхняя граница clip-области (выше чем offset_y)
-        self.options_height = self.rect.height - int(310 * scale)  # Видимая высота области ответов (от clip_y)
-        self.scroll_speed = int(30 * scale)    # Скорость прокрутки колёсиком
+        self.options_offset_x = int(515 * ui_scale) #   Смещение от верхнего левого угла по x и y
+        self.options_offset_y = int(30 * ui_scale)
+        self.options_width = int(303 * ui_scale)    #   Ширина кнопок 
+        self.option_line_height = int(14 * ui_scale)    #   Высота одной строки
+        self.option_padding_y = int(5 * ui_scale)
+        self.button_gap = int(5 * ui_scale)
+        self.option_text_pad_x = int(8 * ui_scale)
+        self.option_wrap_pad = int(20 * ui_scale)
+        self.options_clip_y = int(25 * ui_scale)    # Верхняя граница clip-области (выше чем offset_y)
+        self.options_height = int(158 * ui_scale)  # Видимая высота области ответов (от clip_y)
+        self.scroll_speed = int(24 * ui_scale)    # Скорость прокрутки колёсиком
 
         self.total_options_h = 0    # Полная высота всех кнопок
         self.scrollbar = Scrollbar(
             pygame.Rect(
-                self.rect.x + self.options_offset_x + self.options_width - 10,
+                self.rect.x + int(810 * ui_scale),
                 self.rect.y + self.options_clip_y,
-                8,
+                int(6 * ui_scale),
                 self.options_height,
             ),
             self.scroll_speed,
-            20,
+            int(18 * ui_scale),
         )
 
         # Область портрета навыка (левая часть окна диалога)
-        # Единый масштаб от натурального размера window.png (1536x700)
-        self.portrait_scale = min(w / 1536, h / 700)
-        self.portrait_w = int(207 * self.portrait_scale)
-        self.portrait_h = int(293 * self.portrait_scale)
-        self.portrait_x = int(103 * self.portrait_scale)
-        self.portrait_y = int(348 * self.portrait_scale)
+        self.portrait_w = int(103 * ui_scale)
+        self.portrait_h = int(144 * ui_scale)
+        self.portrait_x = int(20 * ui_scale)
+        self.portrait_y = int(22 * ui_scale)
 
         # Заглушка портрета NPC
         self.npc_portrait = self._build_npc_placeholder(dialogue_data.get("portrait", "???"))
@@ -380,25 +381,25 @@ class DialogueWindow:
 
         self.screen.blit(self.image, self.rect)
 
-        # --- По��трет (навык или заглушка NPC) ---
+        # Портрет (навык или заглушка NPC) 
         px = self.rect.x + self.portrait_x
         py = self.rect.y + self.portrait_y
         if self.current_portrait:
             self.screen.blit(self.current_portrait, (px, py))
-        else:
+        elif self.npc_portrait:
             self.screen.blit(self.npc_portrait, (px, py))
 
         mouse_pos = pygame.mouse.get_pos()
 
-        # --- Текст NPC ---
+        # Текст NPC
         text_x = self.rect.x + self.text_offset_x
         text_y = self.rect.y + self.text_offset_y
         lines = wrap_text(self.answer_text, self.font, self.text_width)
         for i in range(len(lines)):
-            surf = self.font.render(lines[i], True, COLOR_TEXT)
+            surf = self.font.render(lines[i], False, COLOR_TEXT)
             self.screen.blit(surf, (text_x, text_y + i * self.text_line_height))
 
-        # --- Кнопки ответов (с прокруткой) ---
+        # Кнопки ответов (с прокруткой) 
         clip_rect = pygame.Rect(
             self.rect.x + self.options_offset_x,
             self.rect.y + self.options_clip_y,
@@ -427,7 +428,7 @@ class DialogueWindow:
                     draw_y + self.option_padding_y + j * self.option_line_height
                 ))
 
-        # --- Ползунок прокрутки ---
+        # Ползунок прокрутки 
         self.scrollbar.draw(self.screen)
 
         self.screen.set_clip(None)

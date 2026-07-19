@@ -10,8 +10,8 @@ SAVE_QUESTS_PATH = os.path.join(SAVE_DIR, "quests.json")
 
 
 # Размер спрайта персонажа (для базового разрешения 1366x768)
-PLAYER_WIDTH = 80
-PLAYER_HEIGHT = 160
+PLAYER_WIDTH = 48
+PLAYER_HEIGHT = 98
 
 
 class Player:
@@ -23,7 +23,7 @@ class Player:
 
         self.width = int(PLAYER_WIDTH * scale)
         self.height = int(PLAYER_HEIGHT * scale)
-        self.speed = 3 * scale
+        self.speed = 2 * scale
 
         base = BASE_DIR   #   Место откуда берём анимации
 
@@ -32,7 +32,7 @@ class Player:
         self.walking_right = []
         self.walking_down = []
 
-        for i in range(10):     #   Собираем все кадры
+        for i in range(5):     #   Собираем все кадры
             frame = f"frame_{i:03d}.png"
             self.walking_up.append(pygame.transform.scale(pygame.image.load(os.path.join(base, "assets", "up", frame)).convert_alpha(), (self.width, self.height)))
             self.walking_left.append(pygame.transform.scale(pygame.image.load(os.path.join(base, "assets", "left", frame)).convert_alpha(), (self.width, self.height)))
@@ -258,6 +258,7 @@ class Player:
             self.image = self.direction[0]
             return
 
+        was_moving = self.is_moving
         next_gx, next_gy = self.path[0]     #   Вторая клетка - следующая цель пути
         self.target_x, self.target_y = self.game_map.grid_to_pixel_center(next_gx, next_gy) #Обратно переводим корды конца в пиксели т.к перс движется по пикселям
         self.is_moving = True
@@ -273,6 +274,10 @@ class Player:
             self.direction = self.walking_left
         elif dx > 0:
             self.direction = self.walking_right
+
+        if not was_moving:
+            self.current_frame = 1
+        self.image = self.direction[int(self.current_frame)]
 
     def update(self):
         if not self.is_moving:  #   Здешний update работает только когда персонаж двигается
@@ -293,7 +298,7 @@ class Player:
 
         if self.is_moving:  #   Проигрываем анимацию пока идём
             self.current_frame += self.animation_speed
-            if self.current_frame >= 10:
+            if self.current_frame >= 5:
                 self.current_frame = 1
             self.image = self.direction[int(self.current_frame)]
 

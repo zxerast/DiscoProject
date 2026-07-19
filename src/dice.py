@@ -134,7 +134,7 @@ class SkillCheck:
                 self.phase = "rolling"
 
     def update(self):
-        # === Фаза: анимация кубика ===
+        # анимация кубика
         if self.phase == "rolling":
             self.anim_timer += 1
             if self.anim_timer >= ANIM_SPEED:
@@ -158,7 +158,7 @@ class SkillCheck:
                         self.phase_timer = 0
             return
 
-        # === Фаза: пауза после выпадения числа ===
+        # пауза после выпадения числа 
         if self.phase == "wait_before_mods":
             self.phase_timer += 1
             if self.phase_timer >= PHASE_WAIT_BEFORE_MODS:
@@ -170,7 +170,7 @@ class SkillCheck:
                     self.phase_timer = 0
             return
 
-        # === Фаза: поглощение модификаторов по одному ===
+        # поглощение модификаторов по одному 
         if self.phase == "absorb_mods":
             self.phase_timer += 1
             if self.phase_timer >= PHASE_MOD_INTERVAL:
@@ -183,7 +183,7 @@ class SkillCheck:
                     self.phase_timer = 0
             return
 
-        # === Фаза: пауза перед показом результата ===
+        # пауза перед показом результата 
         if self.phase == "wait_before_result":
             self.phase_timer += 1
             if self.phase_timer >= PHASE_WAIT_BEFORE_RESULT:
@@ -212,7 +212,7 @@ class SkillCheck:
                 self.phase = "fade_result"
             return
 
-        # === Фаза: плавное появление надписи ===
+        # плавное появление надписи
         if self.phase == "fade_result":
             self.result_alpha = min(255, self.result_alpha + PHASE_RESULT_FADE_SPEED)
             if self.result_alpha >= 255:

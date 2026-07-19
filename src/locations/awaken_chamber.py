@@ -9,10 +9,10 @@ ROOM_BACKGROUND = os.path.join(ROOM_ASSET_DIR, "hall.png")
 ROOM_BACKGROUND_SIZE = (1664, 960)
 
 ROOM_LAYERS = [
-    {"image": os.path.join(ROOM_ASSET_DIR, "barrel.png"), "x": 185, "y_offset": 694, "tile": (4, 12), "approach": (4, 13)},
-    {"image": os.path.join(ROOM_ASSET_DIR, "computer_interaction.png"), "x": 1305, "y_offset": 373, "tile": (19, 7), "approach": (20, 6)},
+#    {"image": os.path.join(ROOM_ASSET_DIR, "barrel.png"), "x": 185, "y_offset": 694, "tile": (4, 12), "approach": (4, 13)},
+#    {"image": os.path.join(ROOM_ASSET_DIR, "computer_interaction.png"), "x": 1305, "y_offset": 373, "tile": (19, 7), "approach": (20, 6)},
 #    {"image": os.path.join(ROOM_ASSET_DIR, "cryo_cam_interaction.png"), "x": 224, "y_offset": 336, "tile": (3, 7), "approach": (4, 8)},
-    {"image": os.path.join(ROOM_ASSET_DIR, "door_interaction.png"), "x": 690, "y_offset": 76, "tile": (13, 3), "approach": (13, 4)},
+#    {"image": os.path.join(ROOM_ASSET_DIR, "door_interaction.png"), "x": 690, "y_offset": 76, "tile": (13, 3), "approach": (13, 4)},
     {"image": os.path.join(ROOM_ASSET_DIR, "our_camera.png"), "x": 165, "y_offset": 76, "tile": (3, 3), "approach": (3, 4)},
 ]
 
@@ -28,9 +28,9 @@ grid = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,1, 1, 1, 1, 1],
     [1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1 ,1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0, 0, 0],
-    [1, 0, 1, 2, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2 ,1, 1, 1, 1, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2 ,1, 1, 1, 1, 0],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0, 0, 0, 0],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1 ,1, 1, 1, 1, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1 ,1, 1, 1, 1, 1],
@@ -72,10 +72,10 @@ room = GameMap(
     chests=chests,
 #   doors=doors,
     tile_changes=tile_changes,
-    background_image=ROOM_BACKGROUND,
-    background_size=ROOM_BACKGROUND_SIZE,
+#    background_image=ROOM_BACKGROUND,
+#    background_size=ROOM_BACKGROUND_SIZE,
     map_layers=ROOM_LAYERS,
-    depth_layers=ROOM_DEPTH_LAYERS,
-    show_tiles=False,
-    tile_alpha=110,
+#    depth_layers=ROOM_DEPTH_LAYERS,
+    show_tiles=True,
+    tile_alpha=255,
 )

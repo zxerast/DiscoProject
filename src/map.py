@@ -6,7 +6,7 @@ class GameMap:
     def __init__(
         self,
         grid,
-        tile_size=64,
+        tile_size=32,
         npc_dialogues=None,
         chests=None,
         doors=None,
