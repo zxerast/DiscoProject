@@ -8,8 +8,8 @@ from utils import (
 )
 
 # Размер ячейки в натуральном разрешении menu.png
-CELL_NATIVE_W = 99
-CELL_NATIVE_H = 101
+CELL_NATIVE_W = 48
+CELL_NATIVE_H = 48
 
 # Действия первого пункта контекстного меню по типу предмета
 ITEM_ACTIONS = {
@@ -18,12 +18,12 @@ ITEM_ACTIONS = {
 }
 
 # Сетка 9 столбцов x 7 строк
-GRID_COLS = 9
-GRID_ROWS = 7
+GRID_COLS = 11
+GRID_ROWS = 9
 
 # Левый верхний угол сетки (в координатах menu.png)
-GRID_START_X = 276
-GRID_START_Y = 200
+GRID_START_X = 108
+GRID_START_Y = 95
 
 ITEMS_JSON = os.path.join(BASE_DIR, "items.json")
 SAVE_ITEMS_JSON = os.path.join(SAVE_DIR, "items.json")
@@ -38,13 +38,13 @@ def load_items_catalog():
 
 
 class InventoryWindow:
-    def __init__(self, screen, player):
+    def __init__(self, screen, player, scale):
         self.screen = screen
         self.player = player
 
         inv_dir = os.path.join(BASE_DIR, "assets", "inventory")
         size, menu_w, menu_h, self.offset_x, self.offset_y, self.bg = \
-            init_menu_base(screen, os.path.join(inv_dir, "menu.png"))
+            init_menu_base(screen, os.path.join(inv_dir, "menu.png"), scale)
         self.size = size
 
         # Масштабированная ячейка

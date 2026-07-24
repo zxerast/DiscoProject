@@ -4,7 +4,7 @@ import pygame
 
 from inventory import CELL_NATIVE_H, CELL_NATIVE_W, GRID_COLS, GRID_ROWS, ICONS_DIR, load_items_catalog
 from settings import BASE_DIR
-from utils import FONT_PATH, MENU_NATIVE_H, MENU_NATIVE_W, draw_hover_border, find_hovered
+from utils import FONT_PATH, draw_hover_border, find_hovered
 
 
 CHEST_PAD = 8
@@ -12,14 +12,13 @@ CHEST_NAME_PAD = 10
 
 
 class ChestWindow:
-    def __init__(self, screen, player, chest, grid_pos):
+    def __init__(self, screen, player, chest, grid_pos, scale):
         self.screen = screen
         self.player = player
         self.chest = chest
         self.grid_pos = grid_pos
 
-        sw, sh = screen.get_size()
-        self.size = min(sw / MENU_NATIVE_W, sh / MENU_NATIVE_H)
+        self.size = scale
         self.cell_w = int(CELL_NATIVE_W * self.size)
         self.cell_h = int(CELL_NATIVE_H * self.size)
         self.pad = int(CHEST_PAD * self.size)

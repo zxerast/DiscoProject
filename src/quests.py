@@ -8,35 +8,55 @@ QUESTS_JSON = os.path.join(BASE_DIR, "quests.json")
 SAVE_QUESTS_JSON = os.path.join(SAVE_DIR, "quests.json")
 
 # Область списка заданий в координатах menu.png
-QUEST_LIST_X = 226
-QUEST_LIST_Y = 155
-QUEST_LIST_W = 430
-QUEST_LIST_H = 760
 
-QUEST_TEXT_PAD_X = 38
-QUEST_TEXT_PAD_Y = 32
-QUEST_HEADER_SIZE = 46
-QUEST_SECTION_GAP = 52
-QUEST_TITLE_SIZE = 30
-QUEST_TITLE_GAP = 18
-QUEST_SCROLL_SPEED = 48
+# ---------- Список квестов ----------
 
-QUEST_DETAILS_X = 760
-QUEST_DETAILS_Y = 210
-QUEST_DETAILS_W = 800
-QUEST_DETAILS_H = 720
-QUEST_DETAILS_TITLE_SIZE = 46
-QUEST_DETAILS_DESC_SIZE = 24
-QUEST_DETAILS_STAGE_SIZE = 30
-QUEST_DETAILS_LINE_GAP = 8
-QUEST_DETAILS_BLOCK_GAP = 34
-QUEST_STAGE_COMPLETED_SHIFT_Y = 14
+QUEST_LIST_X = 118
+QUEST_LIST_Y = 105
+QUEST_LIST_W = 238
+QUEST_LIST_H = 411
 
-QUEST_GROUPS = [
-    ("main", "Основные:"),
-    ("side", "Побочные:"),
-    ("completed", "Завершённые:"),
-]
+# ---------- Краткое описание ----------
+
+QUEST_DESCRIPTION_X = 400
+QUEST_DESCRIPTION_Y = 105
+QUEST_DESCRIPTION_W = 439
+QUEST_DESCRIPTION_H = 155
+
+# ---------- Текущие цели ----------
+
+QUEST_GOALS_X = 400
+QUEST_GOALS_Y = 285
+QUEST_GOALS_W = 440
+QUEST_GOALS_H = 231
+
+# ---------- Отступы ----------
+
+QUEST_TEXT_PAD_X = 14
+QUEST_TEXT_PAD_Y = 14
+
+# ---------- Размеры шрифтов ----------
+
+QUEST_LIST_FONT_SIZE = 20
+
+QUEST_DESCRIPTION_FONT_SIZE = 15
+
+QUEST_GOALS_FONT_SIZE = 20
+
+# ---------- Межстрочные интервалы ----------
+
+QUEST_LINE_GAP = 2
+
+QUEST_STAGE_GAP = 10
+
+# ---------- Прокрутка ----------
+
+QUEST_SCROLL_SPEED = 40
+
+# ---------- Полоса прокрутки ----------
+
+QUEST_SCROLLBAR_WIDTH = 6
+QUEST_SCROLLBAR_MARGIN = 6
 
 
 def load_quests_catalog():
@@ -46,14 +66,58 @@ def load_quests_catalog():
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+class QuestManager:
+    def __init__(self, player, catalog):
+        self.player = player
+        self.catalog = catalog
+        self.triggers = self._build_triggers()
+
+    def _build_triggers(self):
+        """Создает инвертированный индекс (словарь) подписок на флаги при запуске игры."""
+        triggers = {}
+        for quest_id, quest_data in self.catalog.items():
+            # 1. Триггеры начала квеста
+            for start_flag in quest_data.get("start_triggers", []):
+                triggers.setdefault(start_flag, []).append((quest_id, "start", None, None))
+            
+            # 2. Триггеры переходов по стадиям (адаптировано под новую структуру stages)
+            for stage_id, stage_data in quest_data.get("stages", {}).items():
+                for transition_flag, next_stage in stage_data.get("transitions", {}).items():
+                    triggers.setdefault(transition_flag, []).append((quest_id, "transition", str(stage_id), str(next_stage)))
+        return triggers
+
+    def process_flag(self, flag_name):
+        """Мгновенно проверяет, подписан ли какой-то квест на этот флаг."""
+        if flag_name not in self.triggers:
+            return # Если флаг обычный (например, "met_merchant_50"), ничего не делаем. Нагрузка = 0.
+
+        if not hasattr(self.player, "active_quests"):
+            self.player.active_quests = {}
+
+        for action in self.triggers[flag_name]:
+            quest_id, action_type, stage_id, next_stage = action
+            current_stage = self.player.active_quests.get(quest_id)
+
+            if action_type == "start":
+                # Начинаем квест, если он еще не начат
+                if not current_stage and current_stage not in ["completed", "failed"]:
+                    self.player.active_quests[quest_id] = "1"
+            
+            elif action_type == "transition":
+                # Переводим квест, только если он находится на ожидаемой стадии
+                if str(current_stage) == stage_id:
+                    self.player.active_quests[quest_id] = next_stage
+                    
+                    if next_stage == "completed":
+                        self.player.add_xp(self.catalog[quest_id].get("xp_reward", 0))
 
 class QuestsWindow:
-    def __init__(self, screen, player):
+    def __init__(self, screen, player, scale):
         self.screen = screen
         self.player = player
 
         size, menu_w, menu_h, self.offset_x, self.offset_y, self.bg = \
-            init_menu_base(screen, os.path.join(BASE_DIR, "assets", "quests", "menu.png"))
+            init_menu_base(screen, os.path.join(BASE_DIR, "assets", "quests", "menu.png"), scale)
         self.size = size
 
         self.catalog = load_quests_catalog()
@@ -63,110 +127,196 @@ class QuestsWindow:
             "completed": [],
         }
 
+        # ----------------------------------------------------------
+        # Область списка квестов
+        # ----------------------------------------------------------
+
         self.list_rect = pygame.Rect(
-            self.offset_x + int(QUEST_LIST_X * size),
-            self.offset_y + int(QUEST_LIST_Y * size),
-            int(QUEST_LIST_W * size),
-            int(QUEST_LIST_H * size),
+            self.offset_x + int(QUEST_LIST_X * self.size),
+            self.offset_y + int(QUEST_LIST_Y * self.size),
+            int(QUEST_LIST_W * self.size),
+            int(QUEST_LIST_H * self.size),
         )
-        self.header_font = pygame.font.Font(FONT_PATH, int(QUEST_HEADER_SIZE * size))
-        self.title_font = pygame.font.Font(FONT_PATH, int(QUEST_TITLE_SIZE * size))
-        self.details_title_font = pygame.font.Font(FONT_PATH, int(QUEST_DETAILS_TITLE_SIZE * size))
-        self.details_desc_font = pygame.font.Font(FONT_PATH, int(QUEST_DETAILS_DESC_SIZE * size))
-        self.details_stage_font = pygame.font.Font(FONT_PATH, int(QUEST_DETAILS_STAGE_SIZE * size))
+
+        # ----------------------------------------------------------
+        # Верхний блок (описание)
+        # ----------------------------------------------------------
+
+        self.description_rect = pygame.Rect(
+            self.offset_x + int(QUEST_DESCRIPTION_X * self.size),
+            self.offset_y + int(QUEST_DESCRIPTION_Y * self.size),
+            int(QUEST_DESCRIPTION_W * self.size),
+            int(QUEST_DESCRIPTION_H * self.size),
+        )
+
+        # ----------------------------------------------------------
+        # Нижний блок (цели)
+        # ----------------------------------------------------------
+
+        self.goals_rect = pygame.Rect(
+            self.offset_x + int(QUEST_GOALS_X * self.size),
+            self.offset_y + int(QUEST_GOALS_Y * self.size),
+            int(QUEST_GOALS_W * self.size),
+            int(QUEST_GOALS_H * self.size),
+        )
+
+        self.list_font = pygame.font.Font(
+            FONT_PATH,
+            int(QUEST_LIST_FONT_SIZE * self.size),
+        )
+
+        self.description_font = pygame.font.Font(
+            FONT_PATH,
+            int(QUEST_DESCRIPTION_FONT_SIZE * self.size),
+        )
+
+        self.goals_font = pygame.font.Font(
+            FONT_PATH,
+            int(QUEST_GOALS_FONT_SIZE * self.size),
+        )
+
+        self.text_pad_x = int(QUEST_TEXT_PAD_X * self.size)
+        self.text_pad_y = int(QUEST_TEXT_PAD_Y * self.size)
+        self.line_gap = int(QUEST_LINE_GAP * self.size)
+        self.stage_gap = int(QUEST_STAGE_GAP * self.size)
+        self.scroll_speed = int(QUEST_SCROLL_SPEED * self.size)
+
         self.text_pad_x = int(QUEST_TEXT_PAD_X * size)
         self.text_pad_y = int(QUEST_TEXT_PAD_Y * size)
-        self.section_gap = int(QUEST_SECTION_GAP * size)
-        self.title_gap = int(QUEST_TITLE_GAP * size)
         self.scroll_speed = int(QUEST_SCROLL_SPEED * size)
-        self.details_rect = pygame.Rect(
-            self.offset_x + int(QUEST_DETAILS_X * size),
-            self.offset_y + int(QUEST_DETAILS_Y * size),
-            int(QUEST_DETAILS_W * size),
-            int(QUEST_DETAILS_H * size),
-        )
-        self.details_line_gap = int(QUEST_DETAILS_LINE_GAP * size)
-        self.details_block_gap = int(QUEST_DETAILS_BLOCK_GAP * size)
-        self.completed_stage_shift_y = int(QUEST_STAGE_COMPLETED_SHIFT_Y * size)
         self.hovered_quest_id = None
         self.selected_quest_id = None
 
         self.total_content_h = 0
+        
         self.scrollbar = Scrollbar(
             pygame.Rect(
-                self.list_rect.right - int(16 * self.size),
-                self.list_rect.y + int(18 * self.size),
-                int(8 * self.size),
-                self.list_rect.height - int(36 * self.size),
+                self.list_rect.right - int(QUEST_SCROLLBAR_MARGIN * self.size) - int(QUEST_SCROLLBAR_WIDTH * self.size),
+
+                self.list_rect.y,
+
+                int(QUEST_SCROLLBAR_WIDTH * self.size),
+
+                self.list_rect.height,
             ),
             self.scroll_speed,
-            int(28 * self.size),
+            int(20 * self.size),
         )
+
         self._rebuild_layout()
 
 #   Отрисовка основного списка квестов
 
-    def _refresh_quest_groups(self):
-        self.quest_groups = {
-            "main": [],
-            "side": [],
-            "completed": [],
-        }
+    def _refresh_quest_groups(self):    #       Формирует единый список отображаемых квестов.
+        self.quest_entries = []
+
+        if not hasattr(self.player, "active_quests"):
+            return
+
+        active = []
+        completed = []
 
         for quest_id, quest in self.catalog.items():
-            stages = quest.get("stages", [])
-            stage_flags = [stage.get("complete_flag") for stage in stages if stage.get("complete_flag")]
-            if not stage_flags:
+            state = self.player.active_quests.get(quest_id)
+
+            if state is None:
                 continue
 
-            active = any(self.player.flags.get(flag) is True for flag in stage_flags)
-            completed = all(self.player.flags.get(f"{flag}_completed") is True for flag in stage_flags)
+            if state == "failed":
+                continue
 
-            if completed:
-                self.quest_groups["completed"].append((quest_id, quest))
-            elif active:
-                group_id = quest.get("group", "side")
-                if group_id not in self.quest_groups:
-                    group_id = "side"
-                self.quest_groups[group_id].append((quest_id, quest))
+            entry = {
+                "id": quest_id,
+                "quest": quest,
+                "completed": state == "completed"
+            }
+
+            if state == "completed":
+                completed.append(entry)
+            else:
+                active.append(entry)
+
+        self.quest_entries = active + completed
+
 
     def _rebuild_layout(self):
         self._refresh_quest_groups()
+        self.content_entries = []
+        self.quest_block_rects = {}  # Словарь для хранения полных бесшовных блоков квестов
 
         y = self.list_rect.y + self.text_pad_y
-        self.content_entries = []
+        text_width = (
+            self.list_rect.width
+            - self.text_pad_x * 2
+            - int(QUEST_SCROLLBAR_WIDTH * self.size)
+            - int(QUEST_SCROLLBAR_MARGIN * self.size)
+        )
 
-        for group_id, title in QUEST_GROUPS:
-            surf = self.header_font.render(title, True, (176, 176, 176))
-            rect = surf.get_rect(x=self.list_rect.x + self.text_pad_x, y=y)
-            self.content_entries.append({
-                "kind": "header",
-                "surf": surf,
-                "rect": rect,
-                "completed": False,
-            })
+        separator_needed = False
+        half_gap = self.stage_gap // 2
 
-            y = rect.bottom + self.title_gap
-            for quest_id, quest in self.quest_groups[group_id]:
-                quest_surf = self.title_font.render(quest["title"], True, (255, 255, 255))
-                quest_rect = quest_surf.get_rect(x=self.list_rect.x + self.text_pad_x + int(18 * self.size), y=y)
+        for entry in self.quest_entries:
+            quest_id = entry["id"]
+            quest = entry["quest"]
+
+            lines = wrap_text(
+                quest["title"],
+                self.list_font,
+                text_width
+            )
+
+            quest_start_y = y
+
+            for line in lines:
+                surf = self.list_font.render(line, True, (255, 255, 255))
+
+                rect = surf.get_rect(
+                    x=self.list_rect.x + self.text_pad_x,
+                    y=y
+                )
+
                 self.content_entries.append({
                     "kind": "quest",
                     "id": quest_id,
                     "quest": quest,
-                    "surf": quest_surf,
-                    "rect": quest_rect,
-                    "completed": group_id == "completed",
+                    "completed": entry["completed"],
+                    "text": line,
+                    "rect": rect
                 })
-                y = quest_rect.bottom + self.title_gap
 
-            y += self.section_gap
+                y += surf.get_height() + self.line_gap
 
-        self.total_content_h = y - (self.list_rect.y + self.text_pad_y)
+            quest_end_y = y - self.line_gap
+
+            # Создаем единую область наведения без зазоров по вертикали
+            block_x = self.list_rect.x + self.text_pad_x - int(8 * self.size)
+            block_w = text_width + int(16 * self.size)
+            block_y = quest_start_y - half_gap
+            block_h = (quest_end_y + half_gap) - block_y
+
+            self.quest_block_rects[quest_id] = pygame.Rect(block_x, block_y, block_w, block_h)
+
+            if entry["completed"] and not separator_needed:
+                self.content_entries.append({
+                    "kind": "separator",
+                    "rect": pygame.Rect(
+                        self.list_rect.x + self.text_pad_x,
+                        y,
+                        text_width,
+                        1
+                    )
+                })
+                y += int(10 * self.size)
+                separator_needed = True
+
+            y += self.stage_gap
+
+        self.total_content_h = max(0, y - self.list_rect.y)
+
         self.scrollbar.set_content(
             self.total_content_h,
-            self.list_rect.height - self.text_pad_y * 2,
-            thumb_visible_height=self.list_rect.height,
+            self.list_rect.height,
+            thumb_visible_height=self.list_rect.height
         )
 
 #   Ползунок прокрутки и рендеринг
@@ -176,6 +326,11 @@ class QuestsWindow:
 
     def handle_mousedown(self, pos):
         self.scrollbar.handle_mousedown(pos)
+        
+        # Если кликнули в область списка, закрепляем наведённый квест
+        if self.list_rect.collidepoint(pos) and self.hovered_quest_id:
+            self.selected_quest_id = self.hovered_quest_id
+            
         return None
 
     def handle_mouseup(self, pos=None):
@@ -185,32 +340,35 @@ class QuestsWindow:
         self.scrollbar.handle_mousemotion(pos)
 
     def _find_hovered_quest(self):
-        mouse_pos = pygame.mouse.get_pos()
         self.hovered_quest_id = None
-
-        if not self.list_rect.collidepoint(mouse_pos):
+        mouse = pygame.mouse.get_pos()
+        if not self.list_rect.collidepoint(mouse):
             return None
 
-        for entry in self.content_entries:
-            if entry["kind"] != "quest":
-                continue
-            rect = entry["rect"].move(0, -self.scrollbar.scroll_offset)
-            hover_rect = rect.inflate(int(18 * self.size), int(10 * self.size))
-            if hover_rect.collidepoint(mouse_pos):
-                self.hovered_quest_id = entry["id"]
-                self.selected_quest_id = entry["id"]
-                return entry
+        # Проверяем коллизию с бесшовными блоками квестов
+        for quest_id, block_rect in self.quest_block_rects.items():
+            visible_rect = block_rect.move(0, -self.scrollbar.scroll_offset)
+            if visible_rect.collidepoint(mouse):
+                self.hovered_quest_id = quest_id
+                return quest_id
+
         return None
 
     def _get_details_quest(self):
-        if self.selected_quest_id and self.selected_quest_id in self.catalog:
-            return self.selected_quest_id, self.catalog[self.selected_quest_id]
+        # Описание и цели меняются ТОЛЬКО по клику (selected_quest_id)
+        target_id = self.selected_quest_id
 
-        for group_id, _title in QUEST_GROUPS:
-            if self.quest_groups[group_id]:
-                quest_id, quest = self.quest_groups[group_id][0]
-                self.selected_quest_id = quest_id
-                return quest_id, quest
+        if target_id and target_id in self.catalog:
+            return target_id, self.catalog[target_id]
+
+        # Если ничего не выбрано, выбираем первый квест в списке по умолчанию
+        if self.quest_entries:
+            quest_id = self.quest_entries[0]["id"]
+            self.selected_quest_id = quest_id
+            return quest_id, self.catalog[quest_id]
+
+        return None, None
+
         return None, None
 
     def _draw_strike_line(self, rect, color):
@@ -222,77 +380,173 @@ class QuestsWindow:
             max(1, int(2 * self.size)),
         )
 
-    def _draw_quest_details(self):
+    def _draw_description(self):
         quest_id, quest = self._get_details_quest()
-        if not quest:
+        if quest is None:
             return
 
-        x = self.details_rect.x
-        y = self.details_rect.y
-        max_width = self.details_rect.width
+        x = self.description_rect.x + self.text_pad_x
+        y = self.description_rect.y + self.text_pad_y
+        max_width = self.description_rect.width - self.text_pad_x * 2
 
-        title_lines = wrap_text(quest["title"], self.details_title_font, max_width)
-        for line in title_lines:
-            surf = self.details_title_font.render(line, True, (176, 176, 176))
+        lines = wrap_text(
+            quest.get("description", ""),
+            self.description_font,
+            max_width
+        )
+
+        color = (203, 169, 111)
+
+        for line in lines:
+            # Тень
+            shadow = self.description_font.render(line, True, (0, 0, 0))
+            self.screen.blit(shadow, (x + 2 * self.size, y + 1 * self.size))
+
+            # Текст
+            surf = self.description_font.render(line, True, color)
             self.screen.blit(surf, (x, y))
-            y += surf.get_height() + self.details_line_gap
 
-        y += self.details_block_gap
+            y += surf.get_height() + self.line_gap
 
-        desc_lines = wrap_text(quest.get("description", ""), self.details_desc_font, max_width)
-        for line in desc_lines:
-            surf = self.details_desc_font.render(line, True, (255, 255, 255))
-            self.screen.blit(surf, (x, y))
-            y += surf.get_height() + self.details_line_gap
+    def _draw_goals(self):
+        quest_id, quest = self._get_details_quest()
+        if quest is None:
+            return
 
-        y += self.details_block_gap
+        current_stage = self.player.active_quests.get(quest_id)
+        if current_stage is None:
+            return
 
-        for stage in quest.get("stages", []):
-            flag = stage.get("complete_flag")
-            if not flag:
+        stages = quest.get("stages", {})
+        valid_stages = []
+
+        for stage_id, stage in stages.items():
+            try:
+                s_id = int(stage_id)
+                if current_stage == "completed":
+                    completed = True
+                    active = False
+                elif current_stage != "failed":
+                    c_id = int(current_stage)
+                    completed = s_id < c_id
+                    active = s_id == c_id
+                else:
+                    completed = False
+                    active = False
+            except ValueError:
                 continue
 
-            is_active = self.player.flags.get(flag) is True
-            is_completed = self.player.flags.get(f"{flag}_completed") is True
-            if not is_active and not is_completed:
+            if not completed and not active:
                 continue
 
-            if is_completed:
-                y += self.completed_stage_shift_y
+            priority = 0 if active else 1
+            valid_stages.append((priority, -s_id, stage, completed, active))
 
-            color = (130, 130, 130) if is_completed else (255, 255, 255)
-            stage_lines = wrap_text(stage["text"], self.details_stage_font, max_width)
-            for line in stage_lines:
-                surf = self.details_stage_font.render(line, True, color)
-                rect = surf.get_rect(x=x, y=y)
+        valid_stages.sort(key=lambda item: (item[0], item[1]))
+
+        x = self.goals_rect.x + self.text_pad_x
+        y = self.goals_rect.y + self.text_pad_y
+        max_width = self.goals_rect.width - self.text_pad_x * 2
+
+        for _, _, stage, completed, active in valid_stages:
+            # Темно-серый для зачеркнутых, бежевый для активных
+            color = (140, 140, 140) if completed else (203, 169, 111)
+            lines = wrap_text(stage["text"], self.goals_font, max_width)
+
+            for line in lines:
+                rect = pygame.Rect(x, y, 0, 0)
+                
+                # Тень
+                shadow = self.goals_font.render(line, True, (0, 0, 0))
+                self.screen.blit(shadow, (rect.x + 2 * self.size, rect.y + 1 * self.size))
+
+                # Текст
+                surf = self.goals_font.render(line, True, color)
+                rect.size = surf.get_size()
                 self.screen.blit(surf, rect)
-                if is_completed:
-                    self._draw_strike_line(rect, color)
-                y += surf.get_height() + self.details_line_gap
 
-            y += self.details_line_gap
+                if completed:
+                    self._draw_strike_line(rect, color)
+
+                y += surf.get_height() + self.line_gap
+
+            y += self.stage_gap
 
     def draw(self):
         self._rebuild_layout()
         self._find_hovered_quest()
 
+        # Фон меню
         self.screen.fill((0, 0, 0))
-        self.screen.blit(self.bg, (self.offset_x, self.offset_y))
+        self.screen.blit(
+            self.bg,
+            (self.offset_x, self.offset_y)
+        )
 
+        # -------------------------------
+        # Список квестов
+        # -------------------------------
         self.screen.set_clip(self.list_rect)
+
+        # 1. Отрисовка единого белого фона под наведённым квестом
+        if self.hovered_quest_id and self.hovered_quest_id in self.quest_block_rects:
+            hover_rect = self.quest_block_rects[self.hovered_quest_id].move(
+                0, -self.scrollbar.scroll_offset
+            )
+            pygame.draw.rect(self.screen, (255, 255, 255), hover_rect)
+
+        # 2. Отрисовка строк и разделителей
         for entry in self.content_entries:
             rect = entry["rect"].move(0, -self.scrollbar.scroll_offset)
-            surf = entry["surf"]
-            if entry["kind"] == "quest" and entry["id"] == self.hovered_quest_id:
-                hover_rect = rect.inflate(int(18 * self.size), int(10 * self.size))
-                pygame.draw.rect(self.screen, (255, 255, 255), hover_rect)
-                surf = self.title_font.render(entry["quest"]["title"], True, (0, 0, 0))
-            self.screen.blit(surf, rect)
-            if entry["completed"]:
-                color = (0, 0, 0) if entry["id"] == self.hovered_quest_id else (255, 255, 255)
+
+            if not self.list_rect.colliderect(rect):
+                continue
+
+            # Разделитель
+            if entry["kind"] == "separator":
+                pygame.draw.line(
+                    self.screen, (120, 120, 120),
+                    (rect.x, rect.y), (rect.right, rect.y),
+                    max(1, int(self.size))
+                )
+                continue
+
+            is_hovered = (entry["id"] == self.hovered_quest_id)
+            is_selected = (entry["id"] == self.selected_quest_id)
+            is_completed = entry.get("completed", False)
+
+            # Логика цветов
+            if is_hovered:
+                color = (0, 0, 0)         # Чёрный текст при наведении
+            elif is_selected:
+                color = (255, 255, 255)   # Белый для закреплённого квеста
+            elif is_completed:
+                color = (140, 140, 140)   # Тёмно-серый для выполненных
+            else:
+                color = (203, 169, 111)   # Бежевый по умолчанию
+
+            # Тень текста (рисуем только если текст не чёрный)
+            if not is_hovered:
+                shadow_surf = self.list_font.render(entry["text"], True, (0, 0, 0))
+                self.screen.blit(shadow_surf, (rect.x + 2 * self.size, rect.y + 1 * self.size))
+
+            # Текст элемента
+            text_surf = self.list_font.render(entry["text"], True, color)
+            self.screen.blit(text_surf, rect)
+
+            # Зачёркивание выполненных квестов
+            if is_completed:
                 self._draw_strike_line(rect, color)
+
         self.screen.set_clip(None)
 
-        self._draw_quest_details()
+        # -------------------------------
+        # Правая часть окна
+        # -------------------------------
+        self._draw_description()
+        self._draw_goals()
 
+        # -------------------------------
+        # Полоса прокрутки
+        # -------------------------------
         self.scrollbar.draw(self.screen)

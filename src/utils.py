@@ -1,25 +1,21 @@
 import pygame
 import os
-from settings import BASE_DIR
+from settings import BASE_DIR, BASE_WIDTH, BASE_HEIGHT
 
 FONT_PATH = os.path.join(BASE_DIR, "assets", "font", "web_ibm_mda.ttf")
 
-# Натуральный размер menu.png (общий для всех меню)
-MENU_NATIVE_W = 1820
-MENU_NATIVE_H = 1024
-
 # Область превью (тёмная панель справа)
-PREVIEW_X = 1228
-PREVIEW_Y = 168
-PREVIEW_W = 352
-PREVIEW_H = 498
+PREVIEW_X = 656
+PREVIEW_Y = 89
+PREVIEW_W = 200
+PREVIEW_H = 280
 
 # Текст под превью
-PREVIEW_TEXT_Y = 692
-PREVIEW_TEXT_SIZE = 34
+PREVIEW_TEXT_Y = 382
+PREVIEW_TEXT_SIZE = 18
 
 # Счётчик значения
-CURR_VAL_SIZE = 37
+CURR_VAL_SIZE = 18
 CURR_VAL_X = 1286
 CURR_VAL_Y = 878
 CURR_VAL_DIGIT_GAP = 8
@@ -181,11 +177,11 @@ class Selection:    #   Закрепление превью по клику. О�
         return hovered if hovered is not None else self.selected_idx
 
 
-def init_menu_base(screen, bg_path):    #   Вычисляет масштаб, смещение и загружает фон меню. Общее для skills и inventory.
+def init_menu_base(screen, bg_path, scale):    #   Центрирует и загружает фон меню с уже рассчитанным масштабом.
     sw, sh = screen.get_size()
-    size = min(sw / MENU_NATIVE_W, sh / MENU_NATIVE_H)
-    menu_w = int(MENU_NATIVE_W * size)
-    menu_h = int(MENU_NATIVE_H * size)
+    size = scale  
+    menu_w = int(BASE_WIDTH * size)
+    menu_h = int(BASE_HEIGHT * size)
     offset_x = (sw - menu_w) // 2
     offset_y = (sh - menu_h) // 2
     bg = pygame.transform.scale(

@@ -10,7 +10,7 @@
 
   "start": {
     "text": "Холодный воздух веет от распахнутой недавно, крышки железного гроба. Сиденья внутри на вид мягкие и удобные, но ложиться туда у тебя явно нет ни малейшего желания",
-    "set_flag": ["unknown_start", "do_not_know_about_door", "not_convinced_robot_yet", "do_not_know_comp_code"],
+    "set_flag": ["unknown_start"],
     "passive_checks": [
       {
         "skill": "analysis",
@@ -26,6 +26,7 @@
   },
   "unknown_start": {
     "text": "Железный гроб открыт, от него всё ещё веет холодом",
+    "set_flag": "found_crowbar",
     "options": [
       {"text": "[ПАМЯТЬ] Попытаться вспомнить почему ты был тут заперт",
         "check": {
@@ -57,6 +58,7 @@
 
 
   "remember_beginning_1": {
+    "set_flag": "picked_up_crowbar",
     "text": "Да брось, это же очевиднее некуда. Ты очень важная особа. Ты был избран для проведения важного научного эксперимента",
     "options": [
       {"text": "Да ну?", "next": "remember_beginning_2", "remove_flag": "unknown_start"}
@@ -64,6 +66,7 @@
     "portrait": "short_memory"
   },
   "remember_beginning_2": {
+    "set_flag": "inspected_door",
     "text": "Именно. Тебе позволили участвовать в наиважнейшем эксперименте человечества по сохранению жизни",
     "options": [
       {"text": ">_", "next": "remember_beginning_3"}
@@ -71,6 +74,7 @@
     "portrait": "short_memory"
   },
   "remember_beginning_3": {
+    "set_flag": "find_key",
     "text": "Перед тобой самая инновационная на момент создания криогенная камера производства компании AlcorLife",
     "passive_checks": [
       {

@@ -18,7 +18,6 @@
     },
     "location": "awaken_chamber",
     "inventory": [],
-    "flags": {
-        "find_way_out_stage_1": true
-    }
+    "flags": {},
+    "active_quests": {}
 }

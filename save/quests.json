@@ -1,57 +1,69 @@
 {
-  "find_way_out": {
-    "title": "Пробуждение",
-    "description": "Ты нашёл себя в каком-то бункере, не помнишь кто ты есть и в каком мире живешь. Тут ты этих ответов не найдёшь, надо найти выход отсюда",
-    "group": "main",
-    "stages": [
-      {
-        "text": "Найти выход",
-        "complete_flag": "find_way_out_stage_1"
-      },
-      {
-        "text": "Найти способ открыть дверь",
-        "complete_flag": "find_way_out_stage_2"
-      }
-    ],
-    "xp_reward": 100
-  },
-
-  "find_personality": {
-    "title": "Амнезия",
-    "description": "Кто ты? Кем ты был раньше? Откуда ты? Это всё покрыто мраком тайны, даже для тебя самого.",
-    "group": "side",
-    "stages": [
-      {
-        "text": "Найти информацию о себе.",
-        "complete_flag": "find_info_stage_1"
-      },
-      {
-        "text": "Узнать в чём смысл числа 41",
-        "complete_flag": "find_info_stage_2"
-      },
-      {
-        "text": "Продолжать поиски своей личности",
-        "complete_flag": "find_info_stage_3"
-      }
-    ],
-    "xp_reward": 50
-  },
-
   "force_breakout": {
     "title": "Открывашка",
-    "description": "Как открыть железную дверь? Легко, достаточно найти нужный инструмент и приложить капельку усилий.",
+    "description": "Как открыть железную дверь? Может с помощью лома, или гаечным ключом? Может где-то рядом найдётся терминал который поможет дверь открыть?",
     "group": "side",
-    "stages": [
-      {
+    "xp_reward": 50,
+    "start_triggers": ["found_crowbar"], 
+    "stages": {
+      "1": {
         "text": "Найти чем открыть дверь",
-        "complete_flag": "force_breakout_stage_1"
+        "transitions": {
+          "picked_up_crowbar": "2",
+          "door_opened_by_npc": "failed" 
+        }
       },
-      {
+      "2": {
         "text": "Открыть дверь с помощью монтировки",
-        "complete_flag": "force_breakout_stage_2"
+        "transitions": {
+          "door_forced_open": "completed"
+        }
       }
-    ],
-    "xp_reward": 50
+    }
+  },
+  "force_breakout_e": {
+    "title": "Открывашка",
+    "description": "Как открыть железную дверь? Может с помощью лома, или гаечным ключом? Может где-то рядом найдётся терминал который поможет дверь открыть?",
+    "group": "side",
+    "xp_reward": 50,
+    "start_triggers": ["inspected_door"], 
+    "stages": {
+      "1": {
+        "text": "Найти чем открыть дверь",
+        "transitions": {
+          "picked_up_crowbar": "2",
+          "door_opened_by_npc": "failed" 
+        }
+      },
+      "2": {
+        "text": "Открыть дверь с помощью монтировки",
+        "transitions": {
+          "door_forced_open": "completed"
+        }
+      }
+    }
+  },
+  "force_breakout_d": {
+    "title": "Дивный новый мир",
+    "description": "Как открыть железную дверь? Может с помощью лома, или гаечным ключом? Может где-то рядом найдётся терминал который поможет дверь открыть?",
+    "group": "side",
+    "xp_reward": 50,
+    "start_triggers": ["find_key"], 
+    "stages": {
+      "1": {
+        "text": "Найти чем открыть дверь",
+        "transitions": {
+          "picked_up_crowbar": "2",
+          "door_opened_by_npc": "failed" 
+        }
+      },
+      "2": {
+        "text": "Открыть дверь с помощью монтировки",
+        "transitions": {
+          "door_forced_open": "completed"
+        }
+      }
+    }
   }
 }
 

@@ -1,7 +1,7 @@
 import pygame
 import os
 import json
-from settings import get_uniform_scale, BASE_DIR, SAVE_DIR
+from settings import BASE_DIR, SAVE_DIR
 from skills import SKILL_GROUPS
 
 SAVE_PATH = os.path.join(BASE_DIR, "player.json")
@@ -15,11 +15,9 @@ PLAYER_HEIGHT = 98
 
 
 class Player:
-    def __init__(self, game_map, screen, save_path=SAVE_PATH):
+    def __init__(self, game_map, screen, scale, save_path=SAVE_PATH):
         self.save_path = save_path  #   Данные об игроке
         self.game_map = game_map    #   Загруженная карта
-
-        scale = get_uniform_scale(screen)   #   Скейлим игрока
 
         self.width = int(PLAYER_WIDTH * scale)
         self.height = int(PLAYER_HEIGHT * scale)
@@ -62,6 +60,7 @@ class Player:
         self.attributes = data["attributes"]
         self.skills = data["skills"]
         self.flags = data.get("flags", {})
+        self.active_quests = data.get("active_quests", {})
         self.inventory = data.get("inventory", [])
         self.location = data.get("location", "awaken_chamber")
 
@@ -90,87 +89,23 @@ class Player:
             "location": self.location,
             "inventory": self.inventory,
             "flags": self.flags,
+            "active_quests": self.active_quests,
         }
         with open(self.save_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)    #   Сохраняемся дампя всё собранное 
 
-    def set_flag(self, flag_name, value=True):  #   Ставим флаг состояния игрока, история его действий
+    def set_flag(self, flag_name, value=True):
+        # Оптимизация: если флаг уже стоит, ничего не делаем
+        if self.flags.get(flag_name) == value:
+            return 
+            
         self.flags[flag_name] = value
 
-        if value is not True:
-            return
+        # Если флаг получен (а не снят) и у игрока есть подключенный менеджер квестов
+        if value is True and hasattr(self, 'quest_manager'):
+            self.quest_manager.process_flag(flag_name)
 
-        parsed = self._parse_stage_flag(flag_name)  #   Нужно понять является ли флаг стадией квеста
-
-        if parsed and parsed["completed"]:
-            prefix = parsed["prefix"]
-            completed_stage_num = parsed["stage_num"]
-            active_flag = parsed["active_flag"]
-
-            self.flags.pop(active_flag, None)   #   Убираем флаг текущей стадии
-
-            for stage_num in range(1, completed_stage_num): #   Всем стадиям до неё приписываем completed
-                previous_flag = f"{prefix}{stage_num}"
-                self.flags.pop(previous_flag, None)
-                self.flags[f"{previous_flag}_completed"] = True
-
-        self._normalize_quest_stages(flag_name) #   Если мы просто поставили флаг новой стадии то предыдущие нужно завершить
-        self.award_completed_quest_xp()
-
-
-    def _parse_stage_flag(self, flag_name):
-        completed = False
-        active_flag = flag_name
-
-        if flag_name.endswith("_completed"):    #   completed всегда стоит у завершения стадии квеста
-            completed = True
-            active_flag = flag_name[:-10]
-
-        if "_stage_" not in active_flag:    #   Обычный флаг не стадия квеста
-            return None
-
-        prefix, stage_num = active_flag.rsplit("_stage_", 1)    #   Берём номер стадии
-
-        if not stage_num.isdigit():
-            return None
-
-        return {
-            "prefix": f"{prefix}_stage_",
-            "stage_num": int(stage_num),
-            "active_flag": active_flag,
-            "completed_flag": f"{active_flag}_completed",
-            "completed": completed,
-        }
-
-
-    def _normalize_quest_stages(self, changed_flag=None):
-        prefixes = set()    
-        parsed = self._parse_stage_flag(changed_flag)   #   Берём  множество префиксов активных стадий квеста
-        if parsed:
-            prefixes.add(parsed["prefix"])
-
-        for prefix in prefixes:     #   В каждой активной стадии
-            active_stages = []
-
-            for flag_name, value in self.flags.items(): #   Смотрим установленные флаги
-                if value is not True:
-                    continue
-
-                parsed = self._parse_stage_flag(flag_name)
-
-                if parsed and not parsed["completed"] and parsed["prefix"] == prefix:   #   Добавляем новый флаг
-                    active_stages.append((parsed["stage_num"], flag_name))
-
-            if len(active_stages) < 2:  #   Если только одна активная стадия то ничё не делаем всё ок
-                continue
-
-            latest_stage_num = max(stage_num for stage_num, _ in active_stages) #   А если стало вдруг больше
-
-            for stage_num, flag_name in active_stages:  #   То оставляем только последнюю, остальные завершаем
-                if stage_num < latest_stage_num:
-                    self.flags.pop(flag_name, None)
-                    self.flags[f"{flag_name}_completed"] = True
-
+   
     def get_flag(self, flag_name):      #   Получить имя флага из списка
         return self.flags.get(flag_name, False)
 

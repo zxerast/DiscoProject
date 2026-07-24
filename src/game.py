@@ -7,11 +7,11 @@ from locations.second import room as second_room
 from dialogue import DialogueWindow, load_dialogue
 from skills import SkillsWindow
 from inventory import InventoryWindow
-from quests import QuestsWindow
 from chest import ChestWindow
 from settings import get_uniform_scale, SAVE_DIR
-from utils import MENU_NATIVE_W, MENU_NATIVE_H, FONT_PATH, find_hovered
+from utils import FONT_PATH, find_hovered
 from dice import SkillCheck
+from quests import QuestsWindow, load_quests_catalog, QuestManager
 from save_manager import ensure_initial_save, get_saved_location, json_file, load_rooms_state, save_game, SAVE_PLAYER_PATH
 
 
@@ -39,6 +39,7 @@ class Game:
         pygame.display.set_caption("Disco")
 
         self.sw, self.sh = self.screen.get_size()   #   Размер экрана
+        self.scale = get_uniform_scale(self.screen)
 
         self.clock = pygame.time.Clock()
         self.running = True
@@ -47,7 +48,7 @@ class Game:
         self.start_fade_started_at = 0
         self.main_button_rect = pygame.Rect(0, 0, 0, 0)
         self.exit_button_rect = pygame.Rect(0, 0, 0, 0)
-        self.start_menu_font = pygame.font.Font(FONT_PATH, int(42 * get_uniform_scale(self.screen)))
+        self.start_menu_font = pygame.font.Font(FONT_PATH, int(42 * self.scale))
         self.save_existed_on_launch = os.path.isdir(SAVE_DIR)
         self.pause_active = False
 
@@ -79,12 +80,12 @@ class Game:
         self._init_tabs()
 
         self.skill_check = False    #   Открыто ли окно с кубиком
-        self.dice_window = SkillCheck(self.screen)
-        self.hud_font = pygame.font.Font(FONT_PATH, int(28 * get_uniform_scale(self.screen)))
+        self.dice_window = SkillCheck(self.screen, self.scale)
+        self.hud_font = pygame.font.Font(FONT_PATH, int(28 * self.scale))
         self.death_active = False
         self.death_started_at = 0
-        self.death_title_font = pygame.font.Font(FONT_PATH, int(96 * get_uniform_scale(self.screen)))
-        self.death_continue_font = pygame.font.Font(FONT_PATH, int(36 * get_uniform_scale(self.screen)))
+        self.death_title_font = pygame.font.Font(FONT_PATH, int(96 * self.scale))
+        self.death_continue_font = pygame.font.Font(FONT_PATH, int(36 * self.scale))
         self.death_continue_rect = pygame.Rect(0, 0, 0, 0)
 
     def _start_selected_game(self):     #   Запускаем игру
@@ -102,10 +103,15 @@ class Game:
         load_rooms_state(rooms)
         location = self._get_saved_location()
         self.current_map = rooms[location]
-        self.current_map.set_scale(get_uniform_scale(self.screen))
+        self.current_map.set_scale(self.scale)
 
-        self.player = Player(self.current_map, self.screen, save_path=SAVE_PLAYER_PATH) #   Ставим игрока
+        self.player = Player(self.current_map, self.screen, self.scale, save_path=SAVE_PLAYER_PATH) #   Ставим игрока
         self.player.location = location
+
+        catalog = load_quests_catalog()
+        self.quest_manager = QuestManager(self.player, catalog)
+        self.player.quest_manager = self.quest_manager # Внедряем зависимость в игрока
+
         self._rebuild_player_windows()
         self._reset_runtime_state()
         self.camera_x = self.player.x - self.sw // 2
@@ -138,7 +144,7 @@ class Game:
     def _change_room(self, door):
         target_location = door["target"]    #   Куда переносит дверь
         target_map = rooms[target_location]
-        target_map.set_scale(get_uniform_scale(self.screen))
+        target_map.set_scale(self.scale)
         spawn_x, spawn_y = door["spawn"]
 
         self.current_map = target_map
@@ -171,9 +177,9 @@ class Game:
         self.dice_window.reset()
 
     def _rebuild_player_windows(self):  #   После смерти игрока объект пересоздаётся поэтому мы заново привязываем к нему окна
-        self.skills_window = SkillsWindow(self.screen, self.player)
-        self.inventory_window = InventoryWindow(self.screen, self.player)
-        self.quests_window = QuestsWindow(self.screen, self.player)
+        self.skills_window = SkillsWindow(self.screen, self.player, self.scale)
+        self.inventory_window = InventoryWindow(self.screen, self.player, self.scale)
+        self.quests_window = QuestsWindow(self.screen, self.player, self.scale)
         self.menu_windows = [self.skills_window, self.inventory_window, self.quests_window]
 
     def _get_saved_location(self):
@@ -186,9 +192,12 @@ class Game:
         load_rooms_state(rooms)
         location = self._get_saved_location()
         self.current_map = rooms[location]
-        self.current_map.set_scale(get_uniform_scale(self.screen))
-        self.player = Player(self.current_map, self.screen, save_path=SAVE_PLAYER_PATH) #   Пересоздаём игрока
+        self.current_map.set_scale(self.scale)
+        self.player = Player(self.current_map, self.screen, self.scale, save_path=SAVE_PLAYER_PATH) #   Пересоздаём игрока
         self.player.location = location
+        catalog = load_quests_catalog()
+        self.quest_manager = QuestManager(self.player, catalog)
+        self.player.quest_manager = self.quest_manager
         self._rebuild_player_windows()
         self._reset_runtime_state()     #   Сбрасываем состояния
         self.camera_x = self.player.x - self.sw // 2
@@ -208,32 +217,39 @@ class Game:
         elapsed = pygame.time.get_ticks() - self.death_started_at
         return elapsed >= DEATH_FADE_MS + DEATH_TITLE_FADE_MS + DEATH_CONTINUE_DELAY_MS
 
-    def _init_tabs(self):   #   Создаёт прямоугольники и текстовые поверхности для 3 табов.
-        size = min(self.sw / MENU_NATIVE_W, self.sh / MENU_NATIVE_H)
-        menu_w = int(MENU_NATIVE_W * size)
-        menu_h = int(MENU_NATIVE_H * size)
+    def _init_tabs(self):      # Создаёт три одинаковых вкладки.
+        size = self.scale
+
+        menu_w = int(self.sw)
+        menu_h = int(self.sh)
+
         offset_x = (self.sw - menu_w) // 2
         offset_y = (self.sh - menu_h) // 2
 
-        tab_names = ["Навыки  ", "  Инвентарь ", "  Задания"]
+        self.tab_names = ["Skills", "Inventory", "Quests"]
 
-        tab_h = int(111 * size)
-        tab_gap = int(21 * size)
-        tab_y = offset_y + int(17 * size)
+        # ---------- Размеры вкладок ----------
+        TAB_W = int(233 * size)
+        TAB_H = int(50 * size)
+        TAB_GAP = int(17 * size)
 
-        self.tab_font = pygame.font.Font(FONT_PATH, int(50 * size))
-        self.tab_names = tab_names
+        start_x = offset_x + int(100 * size)   # первая вкладка
+        start_y = offset_y + int(45 * size)
 
-        # Ширина каждого таба подгоняется под текст + отступы
-        padding = int(40 * size)
+        # ---------- Шрифт ----------
+        self.tab_font = pygame.font.Font(FONT_PATH, int(25 * size))
+
+        # ---------- Прямоугольники ----------
         self.tab_rects = []
-        x = offset_x + int(270 * size)
-        for name in tab_names:
-            text_w = self.tab_font.size(name)[0]
-            tab_w = text_w + padding * 2
-            rect = pygame.Rect(x, tab_y, tab_w, tab_h)
+
+        for i in range(3):
+            rect = pygame.Rect(
+                start_x + i * (TAB_W + TAB_GAP),
+                start_y,
+                TAB_W,
+                TAB_H,
+            )
             self.tab_rects.append(rect)
-            x += tab_w + tab_gap
 
     def _draw_tabs(self):   #   Рисует 3 таба вверху экрана.
         mouse_pos = pygame.mouse.get_pos()
@@ -249,6 +265,12 @@ class Game:
             label = self.tab_font.render(self.tab_names[i], True, color)
             lx = rect.x + (rect.w - label.get_width()) // 2
             ly = rect.y + (rect.h - label.get_height()) // 2
+            # Тень только для невыделенных вкладок
+
+            if i != self.menu_tab:
+                shadow = self.tab_font.render(self.tab_names[i], True, (0, 0, 0))
+                self.screen.blit(shadow, (lx + 2 * self.scale, ly + 1 * self.scale))
+
             self.screen.blit(label, (lx, ly))
 
     def _draw_start_button(self, rect, text):
@@ -263,7 +285,7 @@ class Game:
 
     def _draw_black_button_menu(self, main_text):
         self.screen.fill((0, 0, 0))
-        scale = get_uniform_scale(self.screen)
+        scale = self.scale
         min_button_w = int(360 * scale)
         max_text_w = max(self.start_menu_font.size(main_text)[0], self.start_menu_font.size("Выход")[0])
         button_w = max(min_button_w, max_text_w + int(90 * scale))
@@ -338,6 +360,13 @@ class Game:
                 if not self.death_active:
                     self.pause_active = not self.pause_active
                 continue
+            
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                self.player.add_xp(10)
+
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                print("Текущие квесты:", self.player.active_quests)
+                print("Полученные флаги:", self.player.flags)
 
             if self.pause_active:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -383,7 +412,7 @@ class Game:
                     result = self.inventory_window.handle_mouseup(event.pos)
                     if isinstance(result, dict) and result.get("action") == "inspect":
                         dialogue_data = load_dialogue(result["dialogue_id"])
-                        self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player)
+                        self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player, self.scale)
                         self.dialogue_source_pos = None
                         self.dialogue_active = True
                         self.menu_active = False
@@ -421,7 +450,7 @@ class Game:
                             result = self.inventory_window.handle_mousedown(event.pos)  #   Решили осмотреть предмет в инвентаре
                             if isinstance(result, dict) and result.get("action") == "inspect":
                                 dialogue_data = load_dialogue(result["dialogue_id"])
-                                self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player)
+                                self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player, self.scale)
                                 self.dialogue_source_pos = None
                                 self.dialogue_active = True
                                 self.menu_active = False
@@ -558,7 +587,7 @@ class Game:
         if self.pending_chest and not self.player.is_moving:    #   Сундук открыт пока мы стоим
             chest = self.current_map.get_chest(*self.pending_chest)
             if chest:
-                self.chest_window = ChestWindow(self.screen, self.player, chest, self.pending_chest)
+                self.chest_window = ChestWindow(self.screen, self.player, chest, self.pending_chest, self.scale)
             self.pending_chest = None
 
         if self.pending_door and not self.player.is_moving: #   На подходе к двери переносимся
@@ -571,7 +600,7 @@ class Game:
 
         if self.pending_dialogue and not self.player.is_moving: #   Грузим окно диалога
             dialogue_data = load_dialogue(self.pending_dialogue_id)
-            self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player)
+            self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player, self.scale)
             self.dialogue_source_pos = self.pending_dialogue_pos
             self.dialogue_active = True
             self.pending_dialogue = False
@@ -644,7 +673,7 @@ class Game:
         if title_alpha > 0:
             title = self.death_title_font.render("You died", True, (170, 0, 0))
             title.set_alpha(title_alpha)
-            title_rect = title.get_rect(center=(self.sw // 2, self.sh // 2 - int(48 * get_uniform_scale(self.screen))))
+            title_rect = title.get_rect(center=(self.sw // 2, self.sh // 2 - int(48 * self.scale)))
             self.screen.blit(title, title_rect)
 
         continue_start = DEATH_FADE_MS + DEATH_TITLE_FADE_MS + DEATH_CONTINUE_DELAY_MS
@@ -653,14 +682,14 @@ class Game:
             label = self.death_continue_font.render("продолжить?", True, (170, 0, 0))
             label.set_alpha(continue_alpha)
             self.death_continue_rect = label.get_rect(
-                center=(self.sw // 2, self.sh // 2 + int(56 * get_uniform_scale(self.screen)))
+                center=(self.sw // 2, self.sh // 2 + int(56 * self.scale))
             )
             self.screen.blit(label, self.death_continue_rect)
         else:
             self.death_continue_rect = pygame.Rect(0, 0, 0, 0)
 
     def _draw_hud(self):
-        pad = int(24 * get_uniform_scale(self.screen))
+        pad = int(24 * self.scale)
         xp_text = f"{self.player.xp_points}/{self.player.xp_cap}"
         hp_text = str(self.player.health_points)
 
@@ -670,7 +699,7 @@ class Game:
         hp_x = pad
         hp_y = self.sh - pad - hp_surf.get_height()
         xp_x = pad
-        xp_y = hp_y - xp_surf.get_height() - int(4 * get_uniform_scale(self.screen))
+        xp_y = hp_y - xp_surf.get_height() - int(4 * self.scale)
 
         self.screen.blit(xp_surf, (xp_x, xp_y))
         self.screen.blit(hp_surf, (hp_x, hp_y))

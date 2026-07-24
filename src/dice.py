@@ -1,7 +1,7 @@
 import pygame
 import os
 import random
-from settings import get_uniform_scale, BASE_DIR
+from settings import BASE_DIR
 from skills import SKILL_DISPLAY_NAMES
 from utils import FONT_PATH
 
@@ -20,7 +20,7 @@ PHASE_RESULT_FADE_SPEED = 3    # скорость появления надпи�
 
 
 class SkillCheck:
-    def __init__(self, screen):
+    def __init__(self, screen, scale):
         self.screen = screen
         sw, sh = screen.get_size()
 
@@ -37,8 +37,6 @@ class SkillCheck:
             img = pygame.image.load(os.path.join(BASE_DIR, "assets", "d20_final_states", state)).convert_alpha()
             self.final_states.append(img)
 
-        # Масштаб кубика
-        scale = get_uniform_scale(screen)
         self.width = int(DICE_BASE_W * scale)
         self.height = int(DICE_BASE_H * scale)
 

@@ -27,15 +27,15 @@ QUESTION_FONT_SIZE = 14
 
 
 class DialogueWindow:
-    def __init__(self, screen, dialogue_data, player, node_id=None):
+    def __init__(self, screen, dialogue_data, player, scale, node_id=None):
         self.screen = screen
         sw, sh = screen.get_size()
 
         raw = pygame.image.load(os.path.join(ASSETS_PATH, "window.png")).convert_alpha()
 
-        w = sw
+        ui_scale = scale
+        w = int(raw.get_width() * ui_scale)
         h = int(raw.get_height() * w / raw.get_width())
-        ui_scale = w / raw.get_width()
 
         self.image = pygame.transform.scale(raw, (w, h))
 

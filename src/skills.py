@@ -22,47 +22,38 @@ SKILL_GROUPS = [
 
 
 # Размер кнопок + и - (ширина, высота)
-BUTTON_W = 67
-BUTTON_H = 67
+BUTTON_W = 16
+BUTTON_H = 16
 
 # Координаты пар кнопок (minus_x, plus_x, y) для каждой группы навыков
 SKILL_BUTTONS = [
-    {"minus_x": 463, "plus_x": 263, "y": 213},   # СИЛ
-    {"minus_x": 463, "plus_x": 263, "y": 365},   # ЛОВ
-    {"minus_x": 463, "plus_x": 263, "y": 511},   # ИНТ
-    {"minus_x": 463, "plus_x": 263, "y": 659},   # ПСИ
-    {"minus_x": 463, "plus_x": 263, "y": 807},   # ВОС
+    {"minus_y": 131, "plus_y": 113, "x": 301},   # СИЛ
+    {"minus_y": 207, "plus_y": 189, "x": 301},   # ЛОВ
+    {"minus_y": 283, "plus_y": 265, "x": 301},   # ИНТ
+    {"minus_y": 361, "plus_y": 343, "x": 301},   # ПСИ
+    {"minus_y": 435, "plus_y": 417, "x": 301},   # ВОС
 ]
 
 # Размер одной иконки скилла (в координатах menu.png)
-SKILL_ICON_W = 113
-SKILL_ICON_H = 156
+SKILL_ICON_W = 52
+SKILL_ICON_H = 72
 
-# Индивидуальные координаты каждого из 25 прямоугольников (x, y)
-# Порядок соответствует SKILL_NAMES
-SKILL_ICON_POSITIONS = [
-    # СИЛ (ряд 1)
-    (610, 173), (728, 173), (846, 173), (964, 173), (1082, 173),
-    # ЛОВ (ряд 2)
-    (610, 333), (728, 333), (846, 333), (964, 333), (1082, 333),
-    # ИНТ (ряд 3)
-    (610, 493), (728, 493), (846, 493), (964, 493), (1082, 493),
-    # ПСИ (ряд 4)
-    (610, 653), (728, 653), (846, 653), (964, 653), (1082, 653),
-    # ВОС (ряд 5 — чуть ниже)
-    (610, 809), (728, 809), (846, 809), (964, 809), (1082, 809),
-]
+SKILL_ICON_START_POS_X = 368
+SKILL_ICON_START_POS_Y = 88
+
+SKILL_ICON_GAP_X = 3
+SKILL_ICON_GAP_Y = 4
 
 # Центр маленького квадрата с числовым значением навыка
 # относительно левого верхнего угла иконки.
-SKILL_VALUE_CENTER_X = 99
-SKILL_VALUE_CENTER_Y = 139
+SKILL_VALUE_CENTER_X = 44
+SKILL_VALUE_CENTER_Y = 64
 
 # Координаты счётчиков основных атрибутов (в системе menu.png)
-# Между кнопками +/- для каждой группы
-ATTR_VAL_X = 548
-ATTR_VAL_POSITIONS_Y = [227, 379, 525, 673, 821]  # СИЛ, ЛОВ, ИНТ, ПСИ, ВОС
-ATTR_VAL_DIGIT_GAP = 8
+
+ATTR_VAL_X = 337
+ATTR_VAL_POSITIONS_Y = [121, 197, 273, 351, 425]  # СИЛ, ЛОВ, ИНТ, ПСИ, ВОС
+ATTR_VAL_DIGIT_GAP = 4
 
 # Отображаемые названия скиллов
 SKILL_DISPLAY_NAMES = {
@@ -107,32 +98,22 @@ SKILL_NAMES = [
     "vision", "scent", "hearing", "tactility", "intuition",
 ]
 
-# Надписи: текст, x, y, размер шрифта, цвет (R, G, B)
-SKILL_LABELS = [
-    {"text": "СИЛ",     "x": 400, "y": 244, "size": 40, "color": (255, 200, 0)},
-    {"text": "ЛОВ",     "x": 400, "y": 397, "size": 40, "color": (255, 200, 0)},
-    {"text": "ИНТ",     "x": 400, "y": 543, "size": 40, "color": (255, 200, 0)},
-    {"text": "ПСИ",     "x": 400, "y": 691, "size": 40, "color": (255, 200, 0)},
-    {"text": "ВОС",     "x": 400, "y": 839, "size": 40, "color": (255, 200, 0)},
-]
-
 # Ромбы (очки навыков): координаты центра первого ромба, размер и шаг
-DIAMOND_X = 275
-DIAMOND_Y = 915
-DIAMOND_SIZE = 25
+DIAMOND_X = 215
+DIAMOND_Y = 505
+DIAMOND_SIZE = 48
 DIAMOND_GAP = 6
 
 
 class SkillsWindow:
-    def __init__(self, screen, player):
+    def __init__(self, screen, player, scale):
         self.screen = screen
         self.player = player
 
         skills_dir = os.path.join(BASE_DIR, "assets", "skills")
-        size, menu_w, menu_h, self.offset_x, self.offset_y, self.bg = \
-            init_menu_base(screen, os.path.join(skills_dir, "menu.png"))
+        size, menu_w, menu_h, self.offset_x, self.offset_y, self.bg = init_menu_base(screen, os.path.join(skills_dir, "menu.png"), scale)
         self.size = size
-
+        
         # Масштабированный размер кнопок
         btn_w = int(BUTTON_W * size)
         btn_h = int(BUTTON_H * size)
@@ -157,29 +138,17 @@ class SkillsWindow:
         # Создаём rect-ы кнопок: координаты из menu.png * scale + смещение
         self.buttons = []
         for i in SKILL_BUTTONS:
-            minus_rect = pygame.Rect(
-                self.offset_x + int(i["minus_x"] * size),
-                self.offset_y + int(i["y"] * size),
+            plus_rect = pygame.Rect(
+                self.offset_x + int(i["x"] * size),
+                self.offset_y + int(i["plus_y"] * size),
                 btn_w, btn_h,
             )
-            plus_rect = pygame.Rect(
-                self.offset_x + int(i["plus_x"] * size),
-                self.offset_y + int(i["y"] * size),
+            minus_rect = pygame.Rect(
+                self.offset_x + int(i["x"] * size),
+                self.offset_y + int(i["minus_y"] * size),
                 btn_w, btn_h,
             )
             self.buttons.append({"minus": minus_rect, "plus": plus_rect})
-
-        # Надписи: рендерим заранее, x/y — это центр надписи
-        self.skill_labels = []
-        for i in SKILL_LABELS:
-            font = pygame.font.Font(FONT_PATH, int(i["size"] * size))
-            surf = font.render(i["text"], True, i["color"])
-            rect = surf.get_rect(center=(
-                self.offset_x + int(i["x"] * size),
-                self.offset_y + int(i["y"] * size),
-            ))
-            self.skill_labels.append((surf, rect))
-        
 
         # Загрузка иконок скиллов
         icon_w = int(SKILL_ICON_W * size)
@@ -197,13 +166,21 @@ class SkillsWindow:
 
         # Rect-ы 25 иконок скиллов (индивидуальные координаты)
         self.skill_rects = []
-        for x, y in SKILL_ICON_POSITIONS:
-            rect = pygame.Rect(
-                self.offset_x + int(x * size),
-                self.offset_y + int(y * size),
-                icon_w, icon_h,
-            )
-            self.skill_rects.append(rect)
+        start_x = SKILL_ICON_START_POS_X * size
+        start_y = SKILL_ICON_START_POS_Y * size
+        gap_x = SKILL_ICON_GAP_X * size
+        gap_y = SKILL_ICON_GAP_Y * size
+        icon_width = SKILL_ICON_W * size
+        icon_height = SKILL_ICON_H * size
+
+        for row in range(5):
+            for col in range(5):
+                rect = pygame.Rect(
+                    self.offset_x + start_x + col * (icon_width + gap_x),
+                    self.offset_y + start_y + row * (icon_height + gap_y),
+                    icon_w, icon_h,
+                )
+                self.skill_rects.append(rect)
 
         # Панель превью (общая с inventory)
         self.preview = PreviewPanel(screen, size, self.offset_x, self.offset_y)
@@ -212,7 +189,7 @@ class SkillsWindow:
         self.curr_val_font = self.preview.val_font
 
         # Спрайты очков навыков
-        dp_size = int(DIAMOND_SIZE * 2 * size)
+        dp_size = int(DIAMOND_SIZE * size)
         self.img_point_active = pygame.transform.scale(
             pygame.image.load(os.path.join(skills_dir, "skill_point_active.png")).convert_alpha(),
             (dp_size, dp_size),
@@ -226,8 +203,7 @@ class SkillsWindow:
         self.diamond_y = self.offset_y + int(DIAMOND_Y * size) - dp_size // 2
 
         # Шрифт для отображения числовых значений скиллов на иконках
-        self.skill_value_font = pygame.font.Font(FONT_PATH, int(20 * size))
-
+        self.skill_value_font = pygame.font.Font(FONT_PATH, int(13 * size))
         self.selection = Selection()
 
         # Сколько очков потрачено в текущей сессии (до подтверждения)
@@ -282,10 +258,6 @@ class SkillsWindow:
                 self.screen.blit(self.img_plus_hover, pair["plus"])
             else:
                 self.screen.blit(self.img_plus, pair["plus"])
-
-        # Надписи
-        for surf, pos in self.skill_labels:
-            self.screen.blit(surf, pos)
 
         # Счётчики основных атрибутов
         digit_gap = int(ATTR_VAL_DIGIT_GAP * self.size)
