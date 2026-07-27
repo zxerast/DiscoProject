@@ -22,6 +22,11 @@ COLOR_OPTION_HOVER = (255, 240, 200)
 COLOR_OPTION_BG = (40, 35, 30, 0)
 COLOR_OPTION_BG_HOVER = (60, 50, 40, 0)
 
+COLOR_NPC_NAME = (150, 0, 0)     # Красный для NPC
+COLOR_PLAYER_NAME = (100, 220, 100)  # Зеленый для игрока
+COLOR_SKILL_NAME = (140, 75, 0)    # Золотой для навыков
+COLOR_HISTORY_TEXT = (60, 60, 60) # Светло-серый для самого текста лога
+
 ANSWER_FONT_SIZE = 14
 QUESTION_FONT_SIZE = 14
 
@@ -33,53 +38,79 @@ class DialogueWindow:
 
         raw = pygame.image.load(os.path.join(ASSETS_PATH, "window.png")).convert_alpha()
 
-        ui_scale = scale
-        w = int(raw.get_width() * ui_scale)
+        self.ui_scale = scale
+        w = int(raw.get_width() * self.ui_scale)
         h = int(raw.get_height() * w / raw.get_width())
 
         self.image = pygame.transform.scale(raw, (w, h))
 
         self.rect = self.image.get_rect(midbottom=(sw // 2, sh))   # Расположение окна диалога
 
-        self.font = pygame.font.Font(FONT_PATH, int(ANSWER_FONT_SIZE * ui_scale))  # Текст ответа
-        self.option_font = pygame.font.Font(FONT_PATH, int(QUESTION_FONT_SIZE * ui_scale))   # Текст вопросов
+        self.font = pygame.font.Font(FONT_PATH, int(ANSWER_FONT_SIZE * self.ui_scale))  # Текст ответа
+        self.option_font = pygame.font.Font(FONT_PATH, int(QUESTION_FONT_SIZE * self.ui_scale))   # Текст вопросов
 
         # Область текста NPC (координаты для спрайта window.png 960x192)
-        self.text_offset_x = int(150 * ui_scale)
-        self.text_offset_y = int(33 * ui_scale)
-        self.text_width = int(316 * ui_scale)
-        self.text_line_height = int(16 * ui_scale)
+        self.text_offset_x = int(160 * self.ui_scale)
+        self.text_offset_y = int(27 * self.ui_scale)
+        self.text_width = int(316 * self.ui_scale)
+        self.text_line_height = int(16 * self.ui_scale)
+        self.scroll_speed = int(24 * self.ui_scale)    # Скорость прокрутки колёсиком
+        self.text_height = int(156 * self.ui_scale) # Видимая высота области текста
+
+        self.history_blocks = []  # Теперь храним список словарей {"lines": [...], "color": tuple}
+        self.text_target_scroll = 0.0
+        self.is_auto_scrolling = False  # Флаг автоматической прокрутки
+        self.anchor_scroll = 0.0        # Якорь для последней реплики NPC/Навыка
+
+        # Отступ сверху для новой реплики
+        self.text_target_y = self.text_line_height * 2 
+        self.last_speaker = None  # Отслеживаем, кто говорил последнимself.text_target_y = self.text_line_height * 1.5
+        
+        self.text_scrollbar = Scrollbar(
+            pygame.Rect(
+                self.rect.x + self.text_offset_x + self.text_width + int(10 * self.ui_scale),
+                self.rect.y + self.text_offset_y,
+                int(6 * self.ui_scale),
+                self.text_height,
+            ),
+            self.scroll_speed,
+            int(18 * self.ui_scale),
+            track_color=(208, 160, 85),
+            thumb_color=(168, 112, 40),
+            thumb_drag_color=(255, 255, 255),
+        )
+        self.text_scrollbar.track_rect.x -= 1 
 
         # Область кнопок ответов
-        self.options_offset_x = int(515 * ui_scale) #   Смещение от верхнего левого угла по x и y
-        self.options_offset_y = int(30 * ui_scale)
-        self.options_width = int(303 * ui_scale)    #   Ширина кнопок 
-        self.option_line_height = int(14 * ui_scale)    #   Высота одной строки
-        self.option_padding_y = int(5 * ui_scale)
-        self.button_gap = int(5 * ui_scale)
-        self.option_text_pad_x = int(8 * ui_scale)
-        self.option_wrap_pad = int(20 * ui_scale)
-        self.options_clip_y = int(25 * ui_scale)    # Верхняя граница clip-области (выше чем offset_y)
-        self.options_height = int(158 * ui_scale)  # Видимая высота области ответов (от clip_y)
-        self.scroll_speed = int(24 * ui_scale)    # Скорость прокрутки колёсиком
+        self.options_offset_x = int(515 * self.ui_scale) #   Смещение от верхнего левого угла по x и y
+        self.options_offset_y = int(30 * self.ui_scale)
+        self.options_width = int(303 * self.ui_scale)    #   Ширина кнопок 
+        self.option_line_height = int(14 * self.ui_scale)    #   Высота одной строки
+        self.option_padding_y = int(5 * self.ui_scale)
+        self.button_gap = int(5 * self.ui_scale)
+        self.option_text_pad_x = int(8 * self.ui_scale)
+        self.option_wrap_pad = int(20 * self.ui_scale)
+        self.options_clip_y = int(25 * self.ui_scale)    # Верхняя граница clip-области (выше чем offset_y)
+        self.options_height = int(158 * self.ui_scale)  # Видимая высота области ответов (от clip_y)
 
         self.total_options_h = 0    # Полная высота всех кнопок
         self.scrollbar = Scrollbar(
             pygame.Rect(
-                self.rect.x + int(810 * ui_scale),
+                self.rect.x + int(810 * self.ui_scale),
                 self.rect.y + self.options_clip_y,
-                int(6 * ui_scale),
+                int(6 * self.ui_scale),
                 self.options_height,
             ),
             self.scroll_speed,
-            int(18 * ui_scale),
+            int(18 * self.ui_scale),
         )
+        self.scrollbar.track_rect.x += 6
 
         # Область портрета навыка (левая часть окна диалога)
-        self.portrait_w = int(103 * ui_scale)
-        self.portrait_h = int(144 * ui_scale)
-        self.portrait_x = int(20 * ui_scale)
-        self.portrait_y = int(22 * ui_scale)
+        self.portrait_w = int(103 * self.ui_scale)
+        self.portrait_h = int(144 * self.ui_scale)
+        self.portrait_x = int(20 * self.ui_scale)
+        self.portrait_y = int(22 * self.ui_scale)
 
         # Заглушка портрета NPC
         self.npc_portrait = self._build_npc_placeholder(dialogue_data.get("portrait", "???"))
@@ -126,25 +157,84 @@ class DialogueWindow:
             reset=True,
         )
 
-    def handle_scroll(self, dy):    #   Прокрутка колёсиком мыши. dy > 0 — вверх, dy < 0 — вниз.
+    def _add_text_to_history(self, text, color=COLOR_TEXT, speaker=None, speaker_color=COLOR_NPC_NAME):
+        # 1. Мгновенно перекидываем экран к ЯКОРЮ (последней реплике NPC/Навыка).
+        # Делаем это ТОЛЬКО если автопрокрутка не активна (т.е. это самое первое 
+        # добавление после клика игрока).
+        if not self.is_auto_scrolling and hasattr(self, 'anchor_scroll'):
+            self.text_scrollbar.scroll_offset = self.anchor_scroll
+
+        # 2. Добавление имени в историю (если спикер сменился)
+        if speaker and speaker != self.last_speaker:
+            self.history_blocks.append({
+                "lines": [speaker], 
+                "color": speaker_color, 
+                "is_name": True
+            })
+            self.last_speaker = speaker
+            
+        # 3. Добавление самого текста
+        lines = wrap_text(text, self.font, self.text_width)
+        self.history_blocks.append({
+            "lines": lines, 
+            "color": color, 
+            "is_name": False
+        })
+        
+        # Считаем высоту контента
+        total_lines = sum(len(block["lines"]) for block in self.history_blocks)
+        total_h = total_lines * self.text_line_height
+        
+        start_line_idx = total_lines - len(lines)
+        
+        desired_scroll = (start_line_idx * self.text_line_height) - self.text_target_y
+        desired_scroll = max(0, desired_scroll) 
+        
+        content_height = max(total_h, desired_scroll + self.text_height)
+        
+        self.text_scrollbar.set_content(
+            content_height,
+            self.text_height,
+            thumb_visible_height=self.text_height
+        )
+        
+        # 4. Задаем новую цель (в самом низу) и включаем линейную автопрокрутку
+        self.text_target_scroll = desired_scroll
+        self.is_auto_scrolling = True
+
+        # 5. Обновляем якорь ТОЛЬКО если это реплика не от игрока.
+        # Таким образом, якорь всегда будет указывать на последнюю фразу NPC или навыка.
+        if speaker != "Игрок":
+            self.anchor_scroll = desired_scroll
+
+    def handle_scroll(self, dy):
         if not self.active:
             return
-        self.scrollbar.handle_scroll(dy)
+        mouse_pos = pygame.mouse.get_pos()
+        # Если курсор находится в левой половине экрана — крутим историю диалога, иначе варианты ответов
+        if mouse_pos[0] < self.rect.x + self.options_offset_x:
+            self.text_scrollbar.handle_scroll(dy)
+        else:
+            self.scrollbar.handle_scroll(dy)
 
-    def handle_mousedown(self, pos, button):    #   Обработка нажатия кнопки мыши (ЛКМ — клик/захват ползунка).
+    def handle_mousedown(self, pos, button):
         if not self.active:
             return None
-        if button == 1 and self.scrollbar.handle_mousedown(pos):
-            return None
         if button == 1:
+            if self.scrollbar.handle_mousedown(pos):
+                return None
+            if self.text_scrollbar.handle_mousedown(pos):
+                return None
             return self.handle_click(pos)
         return None
 
-    def handle_mouseup(self):   #   Отпускание кнопки мыши — прекращаем перетаскивание.
+    def handle_mouseup(self):
         self.scrollbar.handle_mouseup()
+        self.text_scrollbar.handle_mouseup()
 
-    def handle_mousemotion(self, pos):  #   Перемещение мыши при зажатой кнопке — перетаскивание ползунка.
+    def handle_mousemotion(self, pos):
         self.scrollbar.handle_mousemotion(pos)
+        self.text_scrollbar.handle_mousemotion(pos)
 
     def handle_click(self, pos):
         if not self.active:
@@ -178,7 +268,14 @@ class DialogueWindow:
                     check = self.passive_queue.pop(0)
 
                     # Показываем текст и портрет проверки
-                    self.answer_text = check["text"]
+                    skill_id = check.get("skill", "???")
+                    dc = check.get("dc", 0)
+                    
+                    # Если в JSON есть поле "skill_name" ("Анализ [Успех]"), берем его. 
+                    # Иначе генерируем из ID навыка и сложности (например: "Analysis [Сложность 2: Успех]")
+                    skill_name = check.get("skill_name", f"{skill_id.capitalize()} [Сложность {dc}: Успех]")
+                    
+                    self._add_text_to_history(check["text"], color=COLOR_HISTORY_TEXT, speaker=skill_name, speaker_color=COLOR_SKILL_NAME)
                     self.current_portrait = self._load_portrait(check.get("portrait"))
 
                     # Кнопка после текст проверки — из option_text самой проверки
@@ -210,6 +307,8 @@ class DialogueWindow:
                     return "continue"
 
                 opt = self.option_data[i]
+                if self.passive_state != "continue" and opt.get("text") and opt.get("text") != ">_":
+                    self._add_text_to_history(f"— {opt['text']}", color=COLOR_HISTORY_TEXT, speaker="Игрок", speaker_color=COLOR_PLAYER_NAME)
                 damage = opt.get("damage_on_failure", 0)
                 if damage:
                     self.player.take_damage(damage)
@@ -334,7 +433,19 @@ class DialogueWindow:
         # Ставим флаг, если узел его задаёт
         self._set_flags(node.get("set_flag"))
 
-        self.answer_text = node["text"]
+        # Определяем, кто сейчас говорит (навык или NPC)
+        speaker_name = node.get("speaker_name")
+        if not speaker_name:
+            if node.get("portrait"):
+                speaker_name = node["portrait"].capitalize() # Имя навыка, если это нода навыка
+                speaker_color = COLOR_SKILL_NAME
+            else:
+                speaker_name = self.dialogue_data.get("npc_name", "???")
+                speaker_color = COLOR_NPC_NAME
+        else:
+            speaker_color = COLOR_NPC_NAME
+
+        self._add_text_to_history(node["text"], color=COLOR_HISTORY_TEXT, speaker=speaker_name, speaker_color=speaker_color)
 
         # Портрет навыка из поля "portrait" узла (для узлов-реплик навыка)
         portrait_name = node.get("portrait")
@@ -378,6 +489,19 @@ class DialogueWindow:
     def draw(self):
         if not self.active:
             return
+        
+        # --- ЛИНЕЙНАЯ АВТОПРОКРУТКА ---
+        if self.is_auto_scrolling:
+            diff = self.text_target_scroll - self.text_scrollbar.scroll_offset
+            scroll_speed = 14  # Скорость движения (можешь поменять: больше - быстрее)
+            
+            if abs(diff) <= scroll_speed:
+                # Если расстояние до цели меньше скорости шага, примагничиваемся к финишу
+                self.text_scrollbar.scroll_offset = self.text_target_scroll
+                self.is_auto_scrolling = False # Достигли цели - отключаем
+            else:
+                # Линейно шагаем вниз или вверх
+                self.text_scrollbar.scroll_offset += scroll_speed if diff > 0 else -scroll_speed
 
         self.screen.blit(self.image, self.rect)
 
@@ -391,25 +515,52 @@ class DialogueWindow:
 
         mouse_pos = pygame.mouse.get_pos()
 
-        # Текст NPC
+        # --- 1. ЛЕВАЯ ЧАСТЬ: ИСТОРИЯ ДИАЛОГОВ ---
         text_x = self.rect.x + self.text_offset_x
         text_y = self.rect.y + self.text_offset_y
-        lines = wrap_text(self.answer_text, self.font, self.text_width)
-        for i in range(len(lines)):
-            surf = self.font.render(lines[i], False, COLOR_TEXT)
-            self.screen.blit(surf, (text_x, text_y + i * self.text_line_height))
+        
+        text_clip_rect = pygame.Rect(
+            text_x, text_y, 
+            self.text_width + int(20 * self.ui_scale), self.text_height
+        )
+        self.screen.set_clip(text_clip_rect)
+        
+        current_line_idx = 0
+        
+        for block_i, block in enumerate(self.history_blocks):
+            is_last_block = (block_i == len(self.history_blocks) - 1)
+            
+            # Определяем цвет: 
+            # - Имена всегда сохраняют свой уникальный цвет
+            # - Обычный текст становится черным, если это последний блок, иначе серым
+            if block.get("is_name", False):
+                current_color = block["color"]
+            else:
+                current_color = COLOR_TEXT if is_last_block else COLOR_HISTORY_TEXT
 
-        # Кнопки ответов (с прокруткой) 
-        clip_rect = pygame.Rect(
+            for line in block["lines"]:
+                draw_y = text_y + current_line_idx * self.text_line_height - self.text_scrollbar.scroll_offset
+                
+                # Рендерим только видимые строки
+                if text_y - self.text_line_height <= draw_y <= text_y + self.text_height:
+                    surf = self.font.render(line, False, current_color)
+                    self.screen.blit(surf, (text_x, draw_y))
+                
+                current_line_idx += 1
+                
+        self.screen.set_clip(None)
+        self.text_scrollbar.draw(self.screen)
+
+        # --- 2. ПРАВАЯ ЧАСТЬ: ВАРИАНТЫ ОТВЕТОВ ИГРОКА ---
+        options_clip_rect = pygame.Rect(
             self.rect.x + self.options_offset_x,
             self.rect.y + self.options_clip_y,
             self.options_width + 16, self.options_height
         )
-        self.screen.set_clip(clip_rect)
+        self.screen.set_clip(options_clip_rect)
 
         for i in range(len(self.option_rects)):
             rect = self.option_rects[i]
-            # Смещаем по вертикали на scroll_offset
             draw_y = rect.y - self.scrollbar.scroll_offset
             hovered = pygame.Rect(rect.x, draw_y, rect.w, rect.h).collidepoint(mouse_pos)
 
@@ -418,7 +569,7 @@ class DialogueWindow:
             bg.fill(COLOR_OPTION_BG_HOVER if hovered else COLOR_OPTION_BG)
             self.screen.blit(bg, (rect.x, draw_y))
 
-            # Текст варианта (с переносом строк)
+            # Текст варианта
             color = COLOR_OPTION_HOVER if hovered else COLOR_OPTION
             lines = self.option_lines[i]
             for j in range(len(lines)):
@@ -428,7 +579,5 @@ class DialogueWindow:
                     draw_y + self.option_padding_y + j * self.option_line_height
                 ))
 
-        # Ползунок прокрутки 
         self.scrollbar.draw(self.screen)
-
         self.screen.set_clip(None)

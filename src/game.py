@@ -211,6 +211,7 @@ class Game:
         self._reset_runtime_state()     #   Сбрасываем состояния
         self.camera_x = self.player.x - self.sw // 2
         self.camera_y = self.player.y - self.sh // 2
+        self.action_bar.player = self.player
         self.death_active = False
 
     def _start_death_screen(self):  #   Умерли

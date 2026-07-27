@@ -45,6 +45,7 @@ class Player:
         self.rect.midbottom = (0, game_map.tile_size // 2)  #   Позиция ниже загрузится из сохранения
 
         self.path = []  #   Путь движения игрока
+        self.pending_destination = None
         self.is_moving = False
 
         # Загружаем состояние из JSON
@@ -175,15 +176,24 @@ class Player:
 
     def set_target(self, mouse_x, mouse_y):
         gx, gy = self.game_map.pixel_to_grid(mouse_x, mouse_y)  #   Корды точки назначения в корды по клеткам
-        start = (self.grid_x, self.grid_y)
         end = (gx, gy)
 
+        if self.is_moving:
+            # Персонаж между клетками — нельзя резко перестраивать путь,
+            # иначе получится движение по диагонали.
+            # Запоминаем цель и применим её, когда дойдём до текущей клетки.
+            self.pending_destination = end
+            return
+
+        start = (self.grid_x, self.grid_y)
         if start == end:
+            self.pending_destination = None
             return
 
         path = self.game_map.find_path(start, end)  #   Ищем путь
         if len(path) > 1:
             self.path = path[1:]    #   Отбрасываем первую точку на которой мы стоим и начинаем путь со второй
+            self.pending_destination = None
             self._next_waypoint()
     
     def _next_waypoint(self):
@@ -226,6 +236,18 @@ class Player:
             self.x = self.target_x
             self.y = self.target_y
             self.grid_x, self.grid_y = self.path.pop(0) #   Убираем её из пути, мы на неё пришли
+
+            # Пришли в клетку — здесь позиция гарантированно выровнена по сетке.
+            # Самое безопасное место, чтобы подхватить новую цель.
+            if self.pending_destination is not None:
+                dest = self.pending_destination
+                self.pending_destination = None
+                if dest != (self.grid_x, self.grid_y):
+                    new_path = self.game_map.find_path((self.grid_x, self.grid_y), dest)
+                    self.path = new_path[1:] if len(new_path) > 1 else []
+                else:
+                    self.path = []
+
             self._next_waypoint()   #   Ищем следующую клетку
         else:
             self.x += (dx / dist) * self.speed  #   Медленно попиксельно идём к клетке пока не дойдём до её центра
