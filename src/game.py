@@ -1,4 +1,5 @@
 import pygame
+import math
 import sys
 import os
 from player import Player
@@ -8,10 +9,11 @@ from dialogue import DialogueWindow, load_dialogue
 from skills import SkillsWindow
 from inventory import InventoryWindow
 from chest import ChestWindow
-from settings import get_uniform_scale, SAVE_DIR
+from settings import get_uniform_scale, SAVE_DIR, BASE_DIR
 from utils import FONT_PATH, find_hovered
 from dice import SkillCheck
 from quests import QuestsWindow, load_quests_catalog, QuestManager
+from action_bar import ActionBar
 from save_manager import ensure_initial_save, get_saved_location, json_file, load_rooms_state, save_game, SAVE_PLAYER_PATH
 
 
@@ -56,6 +58,10 @@ class Game:
         self.player = None
         self.camera_x = 0
         self.camera_y = 0
+
+        self.camera_free = False
+        self.camera_speed = 10 * self.scale        # Скорость свободного полета
+        self.max_camera_offset = 500 * self.scale  # Максимальное расстояние от игрока (можно настроить вручную)
 
         self.dialogue_active = False    #   Сейчас в диалоге?
         self.dialogue = None    #   Окно диалога
@@ -107,6 +113,7 @@ class Game:
 
         self.player = Player(self.current_map, self.screen, self.scale, save_path=SAVE_PLAYER_PATH) #   Ставим игрока
         self.player.location = location
+        self.action_bar = ActionBar(self.screen, self.player, self.scale, cam_centerer = self._center_camera_on_player)
 
         catalog = load_quests_catalog()
         self.quest_manager = QuestManager(self.player, catalog)
@@ -174,6 +181,8 @@ class Game:
         self.menu_tab = 0
         self.skill_check = False
         self.pause_active = False
+        self.pause_active = False
+        self.camera_free = False  # <--- Сбрасываем режим свободной камеры
         self.dice_window.reset()
 
     def _rebuild_player_windows(self):  #   После смерти игрока объект пересоздаётся поэтому мы заново привязываем к нему окна
@@ -260,7 +269,7 @@ class Game:
             elif rect.collidepoint(mouse_pos):
                 color = (255, 255, 255)
             else:
-                color = (255, 200, 0)
+                color = (215, 161, 37)
 
             label = self.tab_font.render(self.tab_names[i], True, color)
             lx = rect.x + (rect.w - label.get_width()) // 2
@@ -318,6 +327,12 @@ class Game:
         overlay.fill((0, 0, 0, alpha))
         self.screen.blit(overlay, (0, 0))
 
+    def _center_camera_on_player(self):     #Метод для центрирования камеры на персонаже
+        self.camera_free = False
+        if self.player:
+            self.camera_x = self.player.x - self.sw // 2
+            self.camera_y = self.player.y - self.sh // 2
+
     def run(self):
         while self.running:
             self.handle_events()
@@ -334,6 +349,7 @@ class Game:
                 self.running = False
                 continue
 
+            # Нажатие кнопки в главном меню
             if self.startup_state == "main_menu":
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     continue
@@ -344,6 +360,7 @@ class Game:
                         self.running = False
                 continue
 
+            # Первичное распределение навыков
             if self.startup_state == "initial_skills":
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
                     self._finish_initial_skill_setup()
@@ -351,49 +368,61 @@ class Game:
                     self.skills_window.handle_click(event.pos)
                 continue
 
+            # Первичное появление
             if self.startup_state == "fade_to_game":
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     self.startup_state = "game"
                 continue
 
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE: 
-                if not self.death_active:
-                    self.pause_active = not self.pause_active
-                continue
-            
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
-                self.player.add_xp(10)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    if not self.death_active:
+                        self.pause_active = not self.pause_active
+                    continue
 
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-                print("Текущие квесты:", self.player.active_quests)
-                print("Полученные флаги:", self.player.flags)
+                elif event.key == pygame.K_e:
+                    self.player.add_xp(1000)
+
+                elif event.key == pygame.K_q:
+                    print("Текущие квесты:", self.player.active_quests)
+                    print("Полученные флаги:", self.player.flags)
+
+                elif event.key == pygame.K_F6 and not self.pause_active:
+                    # Быстрая загрузка
+                    self._reload_player_from_save()
+                    continue
+
+                elif event.key in (pygame.K_w, pygame.K_a, pygame.K_s, pygame.K_d) and not self.dialogue_active:
+                    self.camera_free = True  # Отвязываем камеру при нажатии WASD
+
+                elif event.key == pygame.K_c:  # Кнопка для вызова метода центрирования
+                    self._center_camera_on_player()
+                    continue
+
+                elif event.key == pygame.K_TAB:
+                    if self.menu_active:
+                        self.skills_window.confirm()    #   Закрыли меню и подтвердили распределение очков
+                    self.menu_active = not self.menu_active
+                    if self.menu_active:
+                        self.chest_window = None
+                        self.menu_tab = 0  # открываем на вкладке навыков
+                    continue
 
             if self.pause_active:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if self.main_button_rect.collidepoint(event.pos):
                         self._reload_player_from_save()
                         self.pause_active = False
+
                     elif self.exit_button_rect.collidepoint(event.pos):
                         self.running = False
-                continue
 
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F6: #   Быстрая загрузка по F6
-                self._reload_player_from_save()
                 continue
 
             if self.death_active:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  #   Загрузка после смерти
                     if self._death_continue_visible() and self.death_continue_rect.collidepoint(event.pos):
                         self._reload_player_from_save()
-                continue
-
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
-                if self.menu_active:
-                    self.skills_window.confirm()    #   Закрыли меню и подтвердили распределение очков
-                self.menu_active = not self.menu_active
-                if self.menu_active:
-                    self.chest_window = None
-                    self.menu_tab = 0  # открываем на вкладке навыков
                 continue
 
             elif event.type == pygame.MOUSEWHEEL:
@@ -429,12 +458,18 @@ class Game:
                     self.inventory_window.handle_mousemotion(event.pos)
                 elif self.menu_active and self.menu_tab == 2:
                     self.quests_window.handle_mousemotion(event.pos)
+                elif hasattr(self, 'action_bar'): # <--- Новая строка
+                    self.action_bar.handle_mousemotion(event.pos) # <--- Новая строка
                 continue
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:    #   Клик
                 if self.skill_check:
                     self.dice_window.handle_click(event.pos)    #   Клик по кубику
                     continue
+
+                if not self.dialogue_active and not self.menu_active and not self.skill_check:
+                    if hasattr(self, 'action_bar') and self.action_bar.handle_mousedown(event.pos):
+                        continue  # Если кликнули по кнопке панели, не идем туда персонажем
 
                 if self.menu_active:            # Клик по табам
                     tab_clicked = False
@@ -581,8 +616,39 @@ class Game:
         self.player.update()
         if self.player.is_moving:
             self.chest_window = None
-        self.camera_x = self.player.x - self.sw // 2    #   Камера у нас центрирована
-        self.camera_y = self.player.y - self.sh // 2
+
+        if not self.camera_free:
+            self.camera_x = self.player.x - self.sw // 2    #   Камера центрирована на игроке
+            self.camera_y = self.player.y - self.sh // 2
+        else:
+            # Свободный полет камеры по WASD / стрелочкам
+            keys = pygame.key.get_pressed()
+            cam_dx = 0
+            cam_dy = 0
+            if keys[pygame.K_w] or keys[pygame.K_UP]:
+                cam_dy -= self.camera_speed
+            if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+                cam_dy += self.camera_speed
+            if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+                cam_dx -= self.camera_speed
+            if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+                cam_dx += self.camera_speed
+            
+            self.camera_x += cam_dx
+            self.camera_y += cam_dy
+
+            # Ограничение максимального отдаления от персонажа вручную задаваемым радиусом
+            cam_center_x = self.camera_x + self.sw // 2
+            cam_center_y = self.camera_y + self.sh // 2
+            
+            dist = math.hypot(cam_center_x - self.player.x, cam_center_y - self.player.y)
+            if dist > self.max_camera_offset:
+                angle = math.atan2(cam_center_y - self.player.y, cam_center_x - self.player.x)
+                limited_center_x = self.player.x + self.max_camera_offset * math.cos(angle)
+                limited_center_y = self.player.y + self.max_camera_offset * math.sin(angle)
+                
+                self.camera_x = limited_center_x - self.sw // 2
+                self.camera_y = limited_center_y - self.sh // 2
 
         if self.pending_chest and not self.player.is_moving:    #   Сундук открыт пока мы стоим
             chest = self.current_map.get_chest(*self.pending_chest)
@@ -603,6 +669,7 @@ class Game:
             self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player, self.scale)
             self.dialogue_source_pos = self.pending_dialogue_pos
             self.dialogue_active = True
+            self._center_camera_on_player()
             self.pending_dialogue = False
             self.pending_dialogue_id = None
             self.pending_dialogue_pos = None
@@ -641,7 +708,8 @@ class Game:
         if self.chest_window and not self.player.is_moving:
             self.chest_window.draw(self.camera_x, self.camera_y, self.current_map.tile_size)
 
-        self._draw_hud()
+        if not self.dialogue_active and not self.menu_active and not self.skill_check:
+            self.action_bar.draw()
 
         if self.menu_active:  #   Окно меню (навыки/инвентарь/задания)
             self.menu_windows[self.menu_tab].draw()
@@ -687,19 +755,3 @@ class Game:
             self.screen.blit(label, self.death_continue_rect)
         else:
             self.death_continue_rect = pygame.Rect(0, 0, 0, 0)
-
-    def _draw_hud(self):
-        pad = int(24 * self.scale)
-        xp_text = f"{self.player.xp_points}/{self.player.xp_cap}"
-        hp_text = str(self.player.health_points)
-
-        xp_surf = self.hud_font.render(xp_text, True, (255, 255, 255))
-        hp_surf = self.hud_font.render(hp_text, True, (220, 30, 30))
-
-        hp_x = pad
-        hp_y = self.sh - pad - hp_surf.get_height()
-        xp_x = pad
-        xp_y = hp_y - xp_surf.get_height() - int(4 * self.scale)
-
-        self.screen.blit(xp_surf, (xp_x, xp_y))
-        self.screen.blit(hp_surf, (hp_x, hp_y))

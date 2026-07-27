@@ -9,7 +9,7 @@ QUESTS_PATH = os.path.join(BASE_DIR, "quests.json")
 SAVE_QUESTS_PATH = os.path.join(SAVE_DIR, "quests.json")
 
 
-# Размер спрайта персонажа (для базового разрешения 1366x768)
+# Размер спрайта персонажа 
 PLAYER_WIDTH = 48
 PLAYER_HEIGHT = 98
 
