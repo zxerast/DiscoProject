@@ -469,8 +469,16 @@ class Game:
                     continue
 
                 if not self.dialogue_active and not self.menu_active and not self.skill_check:
-                    if hasattr(self, 'action_bar') and self.action_bar.handle_mousedown(event.pos):
-                        continue  # Если кликнули по кнопке панели, не идем туда персонажем
+                    if hasattr(self, 'action_bar'):
+                        # Передаем координаты клика, позицию камеры и объект игрока для проверки прицеливания
+                        res = self.action_bar.handle_mousedown(
+                            event.pos, 
+                            camera_x=self.camera_x, 
+                            camera_y=self.camera_y, 
+                            player_world_pos=(self.player.x, self.player.y)
+                        )
+                        if res:  
+                            continue  # Если клик обработан панелью действий (выбор ячейки или применение), дальше не идем
 
                 if self.menu_active:            # Клик по табам
                     tab_clicked = False
@@ -710,7 +718,7 @@ class Game:
             self.chest_window.draw(self.camera_x, self.camera_y, self.current_map.tile_size)
 
         if not self.dialogue_active and not self.menu_active and not self.skill_check:
-            self.action_bar.draw()
+            self.action_bar.draw(camera_x=self.camera_x, camera_y=self.camera_y)
 
         if self.menu_active:  #   Окно меню (навыки/инвентарь/задания)
             self.menu_windows[self.menu_tab].draw()

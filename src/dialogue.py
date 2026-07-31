@@ -46,8 +46,21 @@ class DialogueWindow:
 
         self.rect = self.image.get_rect(midbottom=(sw // 2, sh))   # Расположение окна диалога
 
+        # Загрузка текстуры полосы здоровья для диалога
+        hp_bar_path = os.path.join(ASSETS_PATH, "health_bar_dialogue.png")
+        raw_hp = pygame.image.load(hp_bar_path).convert_alpha()
+        self.hp_w = int(raw_hp.get_width() * self.ui_scale)
+        self.hp_h = int(raw_hp.get_height() * self.ui_scale)
+        self.hp_img = pygame.transform.scale(raw_hp, (self.hp_w, self.hp_h))
+
+        # Смещения полосы здоровья относительно верхнего левого угла окна диалога
+        # (Эти значения нужно будет подогнать под твой дизайн)
+        self.hp_offset_x = int(838 * self.ui_scale)
+        self.hp_offset_y = int(179 * self.ui_scale)
+
         self.font = pygame.font.Font(FONT_PATH, int(ANSWER_FONT_SIZE * self.ui_scale))  # Текст ответа
         self.option_font = pygame.font.Font(FONT_PATH, int(QUESTION_FONT_SIZE * self.ui_scale))   # Текст вопросов
+        self.hp_font = pygame.font.Font(FONT_PATH, int(8 * self.ui_scale))     # Уменьшенный шрифт специально для значений на полосе здоровья
 
         # Область текста NPC (координаты для спрайта window.png 960x192)
         self.text_offset_x = int(160 * self.ui_scale)
@@ -504,6 +517,44 @@ class DialogueWindow:
                 self.text_scrollbar.scroll_offset += scroll_speed if diff > 0 else -scroll_speed
 
         self.screen.blit(self.image, self.rect)
+
+        # --- Отрисовка полосы здоровья игрока ---
+        if hasattr(self, 'hp_img') and self.hp_img:
+            # Получаем актуальные данные о здоровье игрока
+            max_hp = self.player.get_max_health()
+            current_hp = self.player.health_points
+            
+            # Рассчитываем соотношение
+            hp_ratio = max(0.0, min(1.0, current_hp / max_hp)) if max_hp > 0 else 0.0
+            render_w = int(self.hp_w * hp_ratio)
+            
+            # Отрисовываем только заполненную часть (через clip-прямоугольник в tuple)
+            if render_w > 0:
+                hp_draw_x = self.rect.x + self.hp_offset_x
+                hp_draw_y = self.rect.y + self.hp_offset_y
+                self.screen.blit(self.hp_img, (hp_draw_x, hp_draw_y), (0, 0, render_w, self.hp_h))
+
+        # --- Текст здоровья (текущее/максимальное) по центру ---
+        hp_text = f"{current_hp}/{max_hp}"
+            
+            # Рендерим сам текст и черную тень для читаемости
+        label = self.hp_font.render(hp_text, True, (255, 255, 255))
+        shadow = self.hp_font.render(hp_text, True, (0, 0, 0))
+            
+        # Вычисляем координаты центра полосы здоровья
+        center_x = hp_draw_x + self.hp_w // 2
+        center_y = hp_draw_y + self.hp_h // 2
+            
+         # Получаем прямоугольник текста для центрирования
+        label_rect = label.get_rect(center=(center_x, center_y))
+            
+        # Вычисляем смещение тени с учетом масштабирования интерфейса (как в ActionBar)
+        shadow_x = label_rect.x + (2 * self.ui_scale)
+        shadow_y = label_rect.y + (1 * self.ui_scale)
+            
+        # Отрисовываем сначала тень, затем основной текст сверху
+        self.screen.blit(shadow, (shadow_x, shadow_y))
+        self.screen.blit(label, label_rect)
 
         # Портрет (навык или заглушка NPC) 
         px = self.rect.x + self.portrait_x

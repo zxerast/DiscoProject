@@ -1,0 +1,58 @@
+{
+    "player_actions": {
+        "dash": {
+            "name": "Рывок",
+            "description": "Быстрое перемещение на небольшое расстояние без затрат ОД.",
+            "icon_path": "assets/actions/speed_up.png",
+            "required_flags": [],
+            "effects": {"speed_boost": 2}
+        },
+        "sprint": {
+            "name": "Перебежка",
+            "description": "Увеличивает дальность перемещения в этом ходу.",
+            "icon_path": "assets/actions/retreat.png",
+            "required_flags": [],
+            "effects": {}
+        },
+        "kick": {
+            "name": "Пинок",
+            "description": "Отбрасывает противника на 1 клетку.",
+            "icon_path": "assets/actions/kick.png",
+            "required_flags": [],
+            "effects": {"knockback": 1}
+        }
+    },
+    "weapon_actions": {
+        "unarmed": {
+            "punch": {
+                "name": "Удар кулаком",
+                "description": "Обычный удар ближнего боя.",
+                "icon_path": "assets/icons/actions/punch.png"
+            }
+        },
+        "pistol": {
+            "pistol_shoot": {
+                "name": "Выстрел",
+                "description": "Одиночный выстрел из пистолета.",
+                "icon_path": "assets/icons/actions/pistol_shoot.png"
+            },
+            "pistol_whip": {
+                "name": "Удар рукояткой",
+                "description": "Удар в ближнем бою, если враг подошел вплотную.",
+                "icon_path": "assets/icons/actions/pistol_whip.png"
+            }
+        },
+        "rifle": {
+            "rifle_shoot": {
+                "name": "Прицельный выстрел",
+                "description": "Выстрел с повышенным шансом попадания, требует больше ОД.",
+                "icon_path": "assets/icons/actions/rifle_shoot.png"
+            },
+            "rifle_butt": {
+                "name": "Удар прикладом",
+                "description": "Отбрасывает врага.",
+                "icon_path": "assets/icons/actions/rifle_butt.png"
+            }
+        }
+    }
+}
