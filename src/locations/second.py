@@ -7,7 +7,7 @@ from settings import BASE_DIR
 ROOM_ASSET_DIR = os.path.join(BASE_DIR, "assets", "locations", "second")
 
 ROOM_LAYERS = [
-    {"image": os.path.join(ROOM_ASSET_DIR, "save_terminal.png"), "x": 320, "y_offset": 128, "tile": (5, 2), "approach": (5, 3)},
+    {"image": os.path.join(ROOM_ASSET_DIR, "save_terminal.png"), "tile": (5, 2), "approach": (5, 3)},
 ]
 
 

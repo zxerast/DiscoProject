@@ -12,10 +12,10 @@ SKILL_GROUPS = [
     ["fortitude", "endurance", "musculature", "close_combat", "survival"],
     # ЛОВ (1)
     ["balance", "initiative", "lock_picking", "theft", "accuracy"],
-    # ИНТ (2)
-    ["logic", "knowledge", "technology", "short_memory", "analysis"],
     # ПСИ (3)
     ["empathy", "authority", "persuation", "fear", "volition"],
+    # ИНТ (2)
+    ["logic", "knowledge", "technology", "short_memory", "analysis"],
     # ВОС (4)
     ["vision", "scent", "hearing", "tactility", "intuition"],
 ]
@@ -67,16 +67,16 @@ SKILL_DISPLAY_NAMES = {
     "lock_picking": "Взлом",
     "theft": "Кража",
     "accuracy": "Меткость",
-    "logic": "Логика",
-    "knowledge": "Знания",
-    "technology": "Техника",
-    "short_memory": "Память",
-    "analysis": "Анализ",
     "empathy": "Эмпатия",
     "authority": "Авторитет",
     "persuation": "Убеждение",
     "fear": "Страх",
     "volition": "Сила воли",
+    "logic": "Логика",
+    "knowledge": "Знания",
+    "technology": "Техника",
+    "short_memory": "Память",
+    "analysis": "Анализ",
     "vision": "Зрение",
     "scent": "Обоняние",
     "hearing": "Слух",
@@ -90,10 +90,10 @@ SKILL_NAMES = [
     "fortitude", "endurance", "musculature", "close_combat", "survival",
     # ЛОВ
     "balance", "initiative", "lock_picking", "theft", "accuracy",
-    # ИНТ
-    "logic", "knowledge", "technology", "short_memory", "analysis",
     # ПСИ
     "empathy", "authority", "persuation", "fear", "volition",
+    # ИНТ
+    "logic", "knowledge", "technology", "short_memory", "analysis",
     # ВОС
     "vision", "scent", "hearing", "tactility", "intuition",
 ]

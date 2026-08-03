@@ -9,17 +9,16 @@ ROOM_BACKGROUND = os.path.join(ROOM_ASSET_DIR, "hall.png")
 ROOM_BACKGROUND_SIZE = (1664, 960)
 
 ROOM_LAYERS = [
-#    {"image": os.path.join(ROOM_ASSET_DIR, "barrel.png"), "x": 185, "y_offset": 694, "tile": (4, 12), "approach": (4, 13)},
-#    {"image": os.path.join(ROOM_ASSET_DIR, "computer_interaction.png"), "x": 1305, "y_offset": 373, "tile": (19, 7), "approach": (20, 6)},
-#    {"image": os.path.join(ROOM_ASSET_DIR, "cryo_cam_interaction.png"), "x": 224, "y_offset": 336, "tile": (3, 7), "approach": (4, 8)},
-#    {"image": os.path.join(ROOM_ASSET_DIR, "door_interaction.png"), "x": 690, "y_offset": 76, "tile": (13, 3), "approach": (13, 4)},
-    {"image": os.path.join(ROOM_ASSET_DIR, "our_camera.png"), "x": 165, "y_offset": 76, "tile": (3, 3), "approach": (3, 4)},
+    # Оставляем только тайловые координаты
+    {"image": os.path.join(ROOM_ASSET_DIR, "barrel.png"), "tile": (10, 5), "approach": (5, 5)},
+    {"image": os.path.join(ROOM_ASSET_DIR, "our_camera.png"), "tile": (3, 3), "approach": (3, 4)},
 ]
 
 ROOM_DEPTH_LAYERS = [
-    {"image": os.path.join(ROOM_ASSET_DIR, "back_fence.png"), "x": 102, "y_offset": 306, "y": 480},
-    {"image": os.path.join(ROOM_ASSET_DIR, "desk.png"), "x": 1179, "y_offset": 329, "y": 513},
-    {"image": os.path.join(ROOM_ASSET_DIR, "front_fence.png"), "x": 67, "y_offset": 548, "y": 635},
+    # Добавляем ключ "tile" вместо "x", "y_offset" и "y"
+    {"image": os.path.join(ROOM_ASSET_DIR, "back_fence.png"), "tile": (3, 9)}, 
+    {"image": os.path.join(ROOM_ASSET_DIR, "desk.png"), "tile": (36, 10)},
+    {"image": os.path.join(ROOM_ASSET_DIR, "front_fence.png"), "tile": (2, 17)},
 ]
 
 grid = [
@@ -47,7 +46,7 @@ npc_dialogues = {
 }
 
 chests = {
-    (4, 12): {
+    (10, 5): {
         "cols": 3,
         "rows": 2,
         "items": [
@@ -55,6 +54,7 @@ chests = {
             {"id": "medkit", "count": 3},
             {"id": "casette", "count": 1, "set_flag_on_take": "has_casette"},
             {"id": "letter", "count": 1},
+            {"id": "colt", "count": 1}
         ],
     },
 }
@@ -65,6 +65,8 @@ tile_changes = {
         "door": {"target": "second", "spawn": (1, 1)},
     }
 }
+
+bonfires = {}
 
 room = GameMap(
     grid,
@@ -77,5 +79,6 @@ room = GameMap(
     map_layers=ROOM_LAYERS,
 #    depth_layers=ROOM_DEPTH_LAYERS,
     show_tiles=True,
+    bonfires=bonfires,
     tile_alpha=255,
 )

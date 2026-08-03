@@ -5,7 +5,7 @@ from utils import FONT_PATH
 from actions import Actions
 
 class ActionBar:
-    def __init__(self, screen, player, scale, cam_centerer = None):
+    def __init__(self, screen, player, scale, inventory, cam_centerer = None):
         self.screen = screen
         self.player = player
         self.scale = scale
@@ -80,9 +80,35 @@ class ActionBar:
         self.actions_manager = Actions(actions_db_path, player_dict)
         self.icon_cache = {}
 
+        self.inventory = inventory
+
         # Состояние выбора действия и прицеливания
         self.selected_action = None  # Хранит ID или индекс выбранного действия
         self.is_targeting = False    # Режим прицеливания линии к игроку
+
+        # Слоты оружия
+        slot_w = int(60 * scale)
+        slot_h = int(50 * scale)
+
+        self.left_weapon_rect = pygame.Rect(
+            self.x + int(114 * scale),
+            self.y + int(27 * scale),
+            slot_w,
+            slot_h,
+        )
+
+        self.right_weapon_rect = pygame.Rect(
+            self.x + int(175 * scale),
+            self.y + int(27 * scale),
+            slot_w,
+            slot_h,
+        )
+
+        self.hover_left_weapon = False
+        self.hover_right_weapon = False
+
+        self.weapon_select_mode = False
+        self.selected_weapon_slot = None    
 
     def get_action_rects(self):
         # Начало сетки по координатам 252, 26 на оригинальном спрайте
@@ -106,31 +132,64 @@ class ActionBar:
             rect = pygame.Rect(rx, ry, cell_size, cell_size)
             rects.append((rect, action))
         return rects
-
+            
     def handle_mousemotion(self, pos):
         self.hover_left = self.btn_reload_left.collidepoint(pos)
         self.hover_right = self.btn_reload_right.collidepoint(pos)
 
-    def handle_mousedown(self, pos, camera_x=0, camera_y=0, player_world_pos=None):
-        # Если находимся в режиме прицеливания линии к игроку
-        if self.is_targeting:
-            # Проверяем, кликнули ли мы по игроку (передаются мировые координаты игрока или проверяем через рект)
-            if player_world_pos and self._is_clicked_on_player(pos, player_world_pos, camera_x, camera_y):
-                self.is_targeting = False
-                return self.selected_action
-            else:
-                # При любой другой точке клика текущее состояние отменяется
-                self.selected_action = None
-                self.is_targeting = False
-                return None
+        self.hover_left_weapon = self.left_weapon_rect.collidepoint(pos)
+        self.hover_right_weapon = self.right_weapon_rect.collidepoint(pos)
 
-        # Проверка кликов по сетке действий
+    def handle_mousedown(self, pos, camera_x=0, camera_y=0, player_world_pos=None):
+        if self.weapon_select_mode:
+            for rect, weapon in self.get_weapon_rects():
+                if rect.collidepoint(pos):
+                    self.equip_weapon(weapon["id"])
+                    self.weapon_select_mode = False
+                    return True
+            # Если кликнули мимо списка доступного оружия, панель все равно можно закрыть, 
+            # но проверка по самим слотам идет ниже
+
+        if self.left_weapon_rect.collidepoint(pos):
+            # Если панель открыта для левого слота - закрываем. Иначе - открываем.
+            if self.weapon_select_mode and self.selected_weapon_slot == "left":
+                self.weapon_select_mode = False
+            else:
+                self.weapon_select_mode = True
+                self.selected_weapon_slot = "left"
+            return True
+
+        if self.right_weapon_rect.collidepoint(pos):
+            # Если панель открыта для правого слота - закрываем. Иначе - открываем.
+            if self.weapon_select_mode and self.selected_weapon_slot == "right":
+                self.weapon_select_mode = False
+            else:
+                self.weapon_select_mode = True
+                self.selected_weapon_slot = "right"
+            return True
+            
+        # ... (дальше идет остальной код: проверка клика по сетке действий и т.д.)
+
+        # 1. СНАЧАЛА проверяем клик по сетке действий (позволяет переключать действия)
         action_rects = self.get_action_rects()
         for rect, action in action_rects:
             if rect.collidepoint(pos):
-                self.selected_action = action["name"]
-                self.is_targeting = True # Включаем режим прицеливания (тянется линия)
+                self.selected_action = action["name"] # Запоминаем по ключу "name"
+                self.is_targeting = True 
+                self.player.stop_movement()
                 return "action_selected"
+
+        # 2. ПОТОМ проверяем режим прицеливания
+        if self.is_targeting:
+            if player_world_pos and self._is_clicked_on_player(pos, player_world_pos, camera_x, camera_y):
+                applied_action = self.selected_action
+                self.selected_action = None
+                self.is_targeting = False
+                return applied_action
+            else:
+                self.selected_action = None
+                self.is_targeting = False
+                return None
 
         if self.portrait_rect.collidepoint(pos):
             current_time = pygame.time.get_ticks()
@@ -156,14 +215,124 @@ class ActionBar:
         # Переводим мировые координаты игрока в экранные или используем player.rect с учетом камеры
         p_screen_rect = self.player.rect.move(-cam_x, -cam_y)
         return p_screen_rect.collidepoint(mouse_pos)
+
+    def get_inventory_weapons(self):
+        weapons = []
+        for slot in self.player.inventory:
+            if slot is None:
+                continue
+            item = self.inventory.catalog.get(slot["id"])
+            if item is None:
+                continue
+            if item["type"] in ("pistol", "rifle", "shotgun", "melee"):
+                weapons.append(slot)
+
+        return weapons
         
+    def get_weapon_rects(self):
+        if not self.weapon_select_mode:
+            return []
+
+        weapons = self.get_inventory_weapons()
+
+        cell_size = int(48 * self.scale)
+        gap = int(3 * self.scale)
+
+        if self.selected_weapon_slot == "left":
+            slot_rect = self.left_weapon_rect
+        else:
+            slot_rect = self.right_weapon_rect
+
+        total_width = len(weapons) * cell_size + max(0, len(weapons) - 1) * gap
+
+        start_x = slot_rect.centerx - total_width // 2
+        start_y = slot_rect.y - cell_size - int(12 * self.scale)
+
+        rects = []
+
+        for i, weapon in enumerate(weapons):
+            rect = pygame.Rect(
+                start_x + i * (cell_size + gap),
+                start_y,
+                cell_size,
+                cell_size
+            )
+            rects.append((rect, weapon))
+
+        return rects
+
+    def equip_weapon(self, weapon_id):
+        if self.selected_weapon_slot == "left":
+            # Если кликаем по тому же оружию — снимаем его
+            if self.player.left_arm_weapon and self.player.left_arm_weapon.get("id") == weapon_id:
+                self.player.left_arm_weapon = None
+            else:
+                self.player.left_arm_weapon = {"id": weapon_id}
+                # Если это же оружие было в правой руке — убираем его оттуда
+                if self.player.right_arm_weapon and self.player.right_arm_weapon.get("id") == weapon_id:
+                    self.player.right_arm_weapon = None
+        else:
+            # Если кликаем по тому же оружию — снимаем его
+            if self.player.right_arm_weapon and self.player.right_arm_weapon.get("id") == weapon_id:
+                self.player.right_arm_weapon = None
+            else:
+                self.player.right_arm_weapon = {"id": weapon_id}
+                # Если это же оружие было в левой руке — убираем его оттуда
+                if self.player.left_arm_weapon and self.player.left_arm_weapon.get("id") == weapon_id:
+                    self.player.left_arm_weapon = None
+
+        self.validate_equipment()
+
     def reload_weapon(self, slot_index):
         # Функция-заглушка для механики перезарядки
         print(f"Вызвана перезарядка для слота {slot_index}!")
 
+    def validate_equipment(self):
+        # Собираем ID всех существующих в инвентаре предметов
+        inv_ids = [slot["id"] for slot in self.player.inventory if slot is not None]
+
+        # Проверяем, есть ли экипированное оружие в инвентаре
+        left_exists = self.player.left_arm_weapon and self.player.left_arm_weapon["id"] in inv_ids
+        right_exists = self.player.right_arm_weapon and self.player.right_arm_weapon["id"] in inv_ids
+
+        # Очищаем слоты, если оружие было выброшено
+        if self.player.left_arm_weapon and not left_exists:
+            self.player.left_arm_weapon = None
+        if self.player.right_arm_weapon and not right_exists:
+            self.player.right_arm_weapon = None
+
+        # Обновляем категорию действий на основе оставшегося оружия
+        if left_exists:
+            item = self.inventory.catalog.get(self.player.left_arm_weapon["id"])
+            self.player.equipped_weapon_category = item.get("type", "unarmed") if item else "unarmed"
+        elif right_exists:
+            item = self.inventory.catalog.get(self.player.right_arm_weapon["id"])
+            self.player.equipped_weapon_category = item.get("type", "unarmed") if item else "unarmed"
+        else:
+            self.player.equipped_weapon_category = "unarmed"
+
     def draw(self, camera_x=0, camera_y=0):
+        # 0. Проверяем, не выбросил ли игрок экипированное оружие
+        self.validate_equipment()
+
         # 1. Отрисовка основной панели
         self.screen.blit(self.bar_img, (self.x, self.y))
+
+        # Отрисовка левого оружия (с центрированием)
+        if self.player.left_arm_weapon is not None:
+            icon = self.inventory._get_icon(self.player.left_arm_weapon["id"])
+            if icon:
+                ix = self.left_weapon_rect.x + (self.left_weapon_rect.w - icon.get_width()) // 2
+                iy = self.left_weapon_rect.y + (self.left_weapon_rect.h - icon.get_height()) // 2
+                self.screen.blit(icon, (ix, iy))
+
+        # Отрисовка правого оружия (с центрированием)
+        if self.player.right_arm_weapon is not None:
+            icon = self.inventory._get_icon(self.player.right_arm_weapon["id"])
+            if icon:
+                ix = self.right_weapon_rect.x + (self.right_weapon_rect.w - icon.get_width()) // 2
+                iy = self.right_weapon_rect.y + (self.right_weapon_rect.h - icon.get_height()) // 2
+                self.screen.blit(icon, (ix, iy))
         
         # 2. Отрисовка ячеек действий
         action_rects = self.get_action_rects()
@@ -186,20 +355,15 @@ class ActionBar:
             if cached_img:
                 self.screen.blit(cached_img, rect.topleft)
 
-            # Если ячейка выбрана, рисуем белую обводку
-            if self.selected_action == action["id"]:
-                pygame.draw.rect(self.screen, (255, 255, 255), rect, width=2)
+            # НОВОЕ: Полупрозрачный серый квадрат при наведении мыши
+            if rect.collidepoint(pygame.mouse.get_pos()):
+                hover_surf = pygame.Surface((cell_size, cell_size), pygame.SRCALPHA)
+                hover_surf.fill((128, 128, 128, 128)) # Последнее число - прозрачность (0-255)
+                self.screen.blit(hover_surf, rect.topleft)
 
-        # 3. Если включено прицеливание, рисуем белую линию от центра спрайта игрока к курсору мыши
-        if self.is_targeting:
-            # Центр спрайта игрока на экране (с учетом камеры)
-            player_screen_center_x = self.player.rect.centerx - camera_x
-            player_screen_center_y = self.player.rect.centery - camera_y
-            mouse_pos = pygame.mouse.get_pos()
-            
-            pygame.draw.line(self.screen, (255, 255, 255), 
-                             (player_screen_center_x, player_screen_center_y), 
-                             mouse_pos, width=2)
+            # ИСПРАВЛЕНО: Сравниваем с action["name"], так как именно его мы сохраняем
+            if self.selected_action == action["name"]:
+                pygame.draw.rect(self.screen, (255, 255, 255), rect, width=2)
 
         # 4. Отрисовка кнопок Reload
         self._draw_button(self.btn_reload_left, "Reload", self.hover_left)
@@ -224,8 +388,34 @@ class ActionBar:
         current_xp = self.player.xp_points
         xp_ratio = max(0.0, min(1.0, current_xp / max_xp)) if max_xp > 0 else 0.0
         xp_render_w = int(self.xp_w * xp_ratio)
+        
         if xp_render_w > 0:
             self.screen.blit(self.xp_img, (self.xp_x, self.xp_y), (0, 0, xp_render_w, self.xp_h))
+
+        if self.hover_left_weapon:
+            pygame.draw.rect(self.screen, (255,255,255), self.left_weapon_rect, 2)
+
+        if self.hover_right_weapon:
+            pygame.draw.rect(self.screen, (255,255,255), self.right_weapon_rect, 2)
+
+        if self.weapon_select_mode:
+            mouse = pygame.mouse.get_pos()
+            for rect, weapon in self.get_weapon_rects():
+                # Рисуем png-фон ячейки из инвентаря вместо серой подложки
+                # Подгоняем размер под текущий rect
+                cell_bg = pygame.transform.scale(self.inventory.cell_img, (rect.w, rect.h))
+                self.screen.blit(cell_bg, rect.topleft)
+
+                # Отрисовка иконки оружия строго по центру ячейки
+                icon = self.inventory._get_icon(weapon["id"])
+                if icon:
+                    ix = rect.x + (rect.w - icon.get_width()) // 2
+                    iy = rect.y + (rect.h - icon.get_height()) // 2
+                    self.screen.blit(icon, (ix, iy))
+
+                # Оставляем белую обводку при наведении
+                if rect.collidepoint(mouse):
+                    pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
 
     def _draw_button(self, rect, text, is_hovered):
         color = (255, 255, 255) if is_hovered else (215, 161, 37)

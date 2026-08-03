@@ -27,31 +27,31 @@
             "punch": {
                 "name": "Удар кулаком",
                 "description": "Обычный удар ближнего боя.",
-                "icon_path": "assets/icons/actions/punch.png"
+                "icon_path": "assets/actions/temp_act.png"
             }
         },
         "pistol": {
             "pistol_shoot": {
                 "name": "Выстрел",
                 "description": "Одиночный выстрел из пистолета.",
-                "icon_path": "assets/icons/actions/pistol_shoot.png"
+                "icon_path": "assets/actions/temp_act.png"
             },
             "pistol_whip": {
                 "name": "Удар рукояткой",
                 "description": "Удар в ближнем бою, если враг подошел вплотную.",
-                "icon_path": "assets/icons/actions/pistol_whip.png"
+                "icon_path": "assets/actions/temp_act.png"
             }
         },
         "rifle": {
             "rifle_shoot": {
                 "name": "Прицельный выстрел",
                 "description": "Выстрел с повышенным шансом попадания, требует больше ОД.",
-                "icon_path": "assets/icons/actions/rifle_shoot.png"
+                "icon_path": "assets/actions/temp_act.png"
             },
             "rifle_butt": {
                 "name": "Удар прикладом",
                 "description": "Отбрасывает врага.",
-                "icon_path": "assets/icons/actions/rifle_butt.png"
+                "icon_path": "assets/actions/temp_act.png"
             }
         }
     }

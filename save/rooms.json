@@ -395,7 +395,7 @@
             "3,3": "our_camera"
         },
         "chests": {
-            "4,12": {
+            "10,5": {
                 "cols": 3,
                 "rows": 2,
                 "items": [
@@ -419,6 +419,10 @@
                     },
                     {
                         "id": "letter",
+                        "count": 1
+                    },
+                    {
+                        "id": "colt",
                         "count": 1
                     }
                 ]

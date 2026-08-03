@@ -27,7 +27,7 @@
   },
   "unknown_start": {
     "text": "Железный гроб открыт, от него всё ещё веет холодом",
-    "set_flag": ["found_crowbar", "can_kick"],
+    "set_flag": "found_crowbar",
     "options": [
       {"text": "[ПАМЯТЬ] Попытаться вспомнить почему ты был тут заперт",
         "check": {

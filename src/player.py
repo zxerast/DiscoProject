@@ -21,7 +21,6 @@ class Player:
 
         self.width = int(PLAYER_WIDTH * scale)
         self.height = int(PLAYER_HEIGHT * scale)
-        self.speed = 2 * scale
 
         base = BASE_DIR   #   Место откуда берём анимации
 
@@ -39,11 +38,11 @@ class Player:
 
         self.direction = self.walking_down  #   По умолчанию смотрим вниз
         self.current_frame = 0
-        self.animation_speed = 0.1
         self.image = self.direction[0]
         self.rect = self.image.get_rect()   #   Создаём прямоугольник для персонажа
         self.rect.midbottom = (0, game_map.tile_size // 2)  #   Позиция ниже загрузится из сохранения
 
+        self.scale = scale
         self.path = []  #   Путь движения игрока
         self.pending_destination = None
         self.is_moving = False
@@ -52,49 +51,117 @@ class Player:
         self._load_save()
 
     def _load_save(self):
-        with open(self.save_path, "r", encoding="utf-8") as f: data = json.load(f)
+        with open(self.save_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Основные характеристики
         self.level = data["level"]
         self.skill_points = data["skill_points"]
         self.health_points = data["HP"]
         self.xp_points = data["XP"]
         self.xp_cap = data["XP_cap"]
+
+        # Атрибуты и навыки
         self.attributes = data["attributes"]
         self.skills = data["skills"]
+
+        # Боевые характеристики
+        self.action_points = data["AP"]
+        self.ap_for_move = data["AP_for_move"]
+
+        self.base_speed = data["speed"]
+        self.speed = self.base_speed * self.scale
+        self.animation_speed = 0.05 * self.base_speed
+
+        self.melee_base_damage = data["melee_base_damage"]
+
+        self.left_arm_melee_damage_amplification = data["left_arm_melee_damage_amplification"]
+        self.right_arm_melee_damage_amplification = data["right_arm_melee_damage_amplification"]
+
+        self.left_arm_range_damage_amplification = data["left_arm_range_damage_amplification"]
+        self.right_arm_range_damage_amplification = data["right_arm_range_damage_amplification"]
+
+        self.crit_chance_amplification = data["crit_chance_amplification"]
+        self.base_damage_reduction = data["base_damage_reduction"]
+
+        self.damage_resistance = data["damage_resistance"]
+
+        # Экипировка
+        self.left_arm_weapon = data["left_arm_weapon"]
+        self.right_arm_weapon = data["right_arm_weapon"]
+
+        # Игровое состояние
+        self.location = data.get("location", "awaken_chamber")
+        self.effects = data.get("effects", [])
+        self.inventory = data.get("inventory", [])
         self.flags = data.get("flags", {})
         self.active_quests = data.get("active_quests", {})
-        self.inventory = data.get("inventory", [])
-        self.location = data.get("location", "awaken_chamber")
 
-        # Позиция из сейва (перезаписывает аргументы __init__)
+        # Позиция
         self.grid_x = data["position"]["grid_x"]
         self.grid_y = data["position"]["grid_y"]
-        
+
         ts = self.game_map.tile_size
         self.x = float(self.grid_x * ts + ts // 2)
         self.y = float(self.grid_y * ts + ts // 2)
         self.target_x = self.x
         self.target_y = self.y
         self.rect.midbottom = (int(self.x), int(self.y) + ts // 2)
+
+        # Ограничиваем здоровье максимумом
         self.health_points = max(1, min(self.health_points, self.get_max_health()))
 
     def save(self):
         data = {
+            # Основные характеристики
             "level": self.level,
             "skill_points": self.skill_points,
             "HP": self.health_points,
             "XP": self.xp_points,
             "XP_cap": self.xp_cap,
+
+            # Атрибуты и навыки
             "attributes": self.attributes,
             "skills": self.skills,
-            "position": {"grid_x": self.grid_x, "grid_y": self.grid_y},
+
+            # Позиция
+            "position": {
+                "grid_x": self.grid_x,
+                "grid_y": self.grid_y
+            },
+
+            # Боевые характеристики
+            "AP": self.action_points,
+            "AP_for_move": self.ap_for_move,
+            "speed": self.base_speed,
+            "melee_base_damage": self.melee_base_damage,
+
+            "left_arm_melee_damage_amplification": self.left_arm_melee_damage_amplification,
+            "right_arm_melee_damage_amplification": self.right_arm_melee_damage_amplification,
+
+            "left_arm_range_damage_amplification": self.left_arm_range_damage_amplification,
+            "right_arm_range_damage_amplification": self.right_arm_range_damage_amplification,
+
+            "crit_chance_amplification": self.crit_chance_amplification,
+            "base_damage_reduction": self.base_damage_reduction,
+
+            "damage_resistance": self.damage_resistance,
+
+            # Экипировка
+            "left_arm_weapon": self.left_arm_weapon,
+            "right_arm_weapon": self.right_arm_weapon,
+
+            # Игровое состояние
             "location": self.location,
+            "effects": self.effects,
             "inventory": self.inventory,
             "flags": self.flags,
             "active_quests": self.active_quests,
         }
-        with open(self.save_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)    #   Сохраняемся дампя всё собранное 
 
+        with open(self.save_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+            
     def set_flag(self, flag_name, value=True):
         # Оптимизация: если флаг уже стоит, ничего не делаем
         if self.flags.get(flag_name) == value:
@@ -195,6 +262,13 @@ class Player:
             self.path = path[1:]    #   Отбрасываем первую точку на которой мы стоим и начинаем путь со второй
             self.pending_destination = None
             self._next_waypoint()
+    
+    def stop_movement(self):
+        # Если персонаж уже в пути, обрезаем маршрут, оставляя только текущую ячейку
+        if self.path:
+            self.path = [self.path[0]]
+        # Сбрасываем запланированную точку назначения
+        self.pending_destination = None
     
     def _next_waypoint(self):
         if not self.path:   #   Если в пути закончились клетки

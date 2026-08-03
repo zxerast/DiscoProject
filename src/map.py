@@ -16,6 +16,7 @@ class GameMap:
         map_layers=None,
         depth_layers=None,
         show_tiles=True,
+        bonfires=None,
         tile_alpha=255,
     ):
         self.base_tile_size = tile_size
@@ -32,6 +33,7 @@ class GameMap:
         self.depth_layers = [self._normalize_layer(layer) for layer in (depth_layers or [])]
         self.show_tiles = show_tiles
         self.tile_alpha = tile_alpha
+        self.bonfires = bonfires or {}
         self._background_original = None
         self._background_scaled = None
         self._background_scaled_size = None
@@ -121,8 +123,14 @@ class GameMap:
 
     def _get_layer_rect(self, layer, cam_x=0, cam_y=0):
         image = self._get_layer_image(layer)
-        x = int(round(layer.get("x", 0) * self.scale - cam_x))
-        y = int(round(layer.get("y_offset", 0) * self.scale - cam_y))
+        gx, gy = layer.get("tile", (0, 0))
+        
+        # Выравниваем центр спрайта по центру тайла по горизонтали
+        x = gx * self.tile_size + (self.tile_size - image.get_width()) // 2 - cam_x
+        
+        # Выравниваем НИЗ спрайта по НИЗУ тайла
+        y = gy * self.tile_size + self.tile_size - image.get_height() - cam_y
+        
         return pygame.Rect(x, y, image.get_width(), image.get_height())
 
     def _draw_layer(self, screen, layer, cam_x=0, cam_y=0):
@@ -156,7 +164,12 @@ class GameMap:
 
     def draw_depth_layers(self, screen, player_y, in_front, cam_x=0, cam_y=0):
         for layer in self.depth_layers:
-            layer_y = layer["y"] * self.scale
+            # Получаем прямоугольник слоя без учета камеры, чтобы узнать его абсолютные мировые координаты
+            rect = self._get_layer_rect(layer, 0, 0)
+            
+            # Точка глубины объекта — это нижняя граница его спрайта
+            layer_y = rect.bottom
+            
             layer_in_front = player_y <= layer_y
 
             if layer_in_front == in_front:
@@ -173,40 +186,6 @@ class GameMap:
             return False
         return self.grid[y][x] == 0 #   Если номер клетки в массиве 0 то возвращаем True иначе False
 
-    def is_interactive(self, x, y):
-        if x < 0 or y < 0:
-            return False
-
-        if x >= self.width or y >= self.height:
-            return False
-        
-        if x >= len(self.grid[y]):
-            return False
-        return self.grid[y][x] in (2, 3, 4, 5)
-
-    def is_npc(self, x, y):
-        return self._tile_at(x, y) == 2
-
-    def is_chest(self, x, y):
-        return self._tile_at(x, y) == 3
-
-    def is_door(self, x, y):
-        return self._tile_at(x, y) == 4
-
-    def is_bonfire(self, x, y):
-        return self._tile_at(x, y) == 5
-
-    def _tile_at(self, x, y):
-        if x < 0 or y < 0:
-            return None
-
-        if x >= self.width or y >= self.height:
-            return None
-
-        if x >= len(self.grid[y]):
-            return None
-        return self.grid[y][x]
-
     def get_dialogue_id(self, x, y):
         return self.npc_dialogues.get((x, y))
 
@@ -215,6 +194,9 @@ class GameMap:
 
     def get_door(self, x, y):
         return self.doors.get((x, y))
+    
+    def get_bonfire(self, x, y):
+        return self.bonfires.get((x, y))
 
     def _pack_points(self, data):
         return {f"{x},{y}": copy.deepcopy(value) for (x, y), value in data.items()}
@@ -252,11 +234,13 @@ class GameMap:
         self.chests.pop(pos, None)
         self.doors.pop(pos, None)
 
-        if tile == 2:
+        if "dialogue" in change:
             self.npc_dialogues[pos] = change["dialogue"]
-        elif tile == 3:
+
+        if "chest" in change:
             self.chests[pos] = copy.deepcopy(change["chest"])
-        elif tile == 4:
+
+        if "door" in change:
             self.doors[pos] = copy.deepcopy(change["door"])
 
     def pixel_to_grid(self, px, py):

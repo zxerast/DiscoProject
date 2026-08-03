@@ -113,7 +113,6 @@ class Game:
 
         self.player = Player(self.current_map, self.screen, self.scale, save_path=SAVE_PLAYER_PATH) #   Ставим игрока
         self.player.location = location
-        self.action_bar = ActionBar(self.screen, self.player, self.scale, cam_centerer = self._center_camera_on_player)
 
         catalog = load_quests_catalog()
         self.quest_manager = QuestManager(self.player, catalog)
@@ -190,6 +189,7 @@ class Game:
         self.inventory_window = InventoryWindow(self.screen, self.player, self.scale)
         self.quests_window = QuestsWindow(self.screen, self.player, self.scale)
         self.menu_windows = [self.skills_window, self.inventory_window, self.quests_window]
+        self.action_bar = ActionBar(self.screen, self.player, self.scale, self.inventory_window, cam_centerer = self._center_camera_on_player)
 
     def _get_saved_location(self):
         location = get_saved_location(START_LOCATION)
@@ -377,7 +377,12 @@ class Game:
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    if not self.death_active:
+                    if self.action_bar.is_targeting:
+                        self.action_bar.selected_action = None
+                        self.action_bar.is_targeting = False
+                        self.action_bar.weapon_select_mode = False
+
+                    elif not self.death_active:
                         self.pause_active = not self.pause_active
                     continue
 
@@ -558,8 +563,6 @@ class Game:
 
                 gx, gy = clicked_sprite["tile"]
                 approach_x, approach_y = clicked_sprite["approach"]
-                if not self.current_map.is_interactive(gx, gy):
-                    continue
 
                 self.pending_dialogue = False
                 self.pending_dialogue_id = None
@@ -568,16 +571,20 @@ class Game:
                 self.pending_door = None
                 self.pending_save = False
 
-                if self.current_map.is_chest(gx, gy):
+                if self.current_map.get_chest(gx, gy):
                     self.pending_chest = (gx, gy)
-                elif self.current_map.is_door(gx, gy):
+
+                elif self.current_map.get_door(gx, gy):
                     self.pending_door = self.current_map.get_door(gx, gy)
-                elif self.current_map.is_bonfire(gx, gy):
-                    self.pending_save = True
-                else:
-                    self.pending_dialogue = True    # То откроем диалог
-                    self.pending_dialogue_id = self.current_map.get_dialogue_id(gx, gy)  # Запоминаем какой
+
+                elif self.current_map.get_dialogue_id(gx, gy):
+                    self.pending_dialogue = True
+                    self.pending_dialogue_id = self.current_map.get_dialogue_id(gx, gy)
                     self.pending_dialogue_pos = (gx, gy)
+
+                # если в будущем появятся костры
+                elif self.current_map.get_bonfire(gx, gy):
+                    self.pending_save = True
 
                 target = self.current_map.grid_to_pixel_center(approach_x, approach_y)
                 self.player.set_target(target[0], target[1])    #   Мы готовы идти, пошли
@@ -706,7 +713,25 @@ class Game:
 
         self.current_map.draw(self.screen, self.camera_x, self.camera_y)    #   Карта
         self.current_map.draw_depth_layers(self.screen, self.player.y, False, self.camera_x, self.camera_y)
+
+        if self.action_bar.is_targeting:
+            player_screen_pos = (self.player.rect.centerx - self.camera_x, self.player.rect.centery - self.camera_y)
+            pygame.draw.line(self.screen, (255, 255, 255), player_screen_pos, pygame.mouse.get_pos(), width=2)
+
         self.player.draw(self.screen, self.camera_x, self.camera_y) #   Игрок
+
+        if self.action_bar.is_targeting:
+            mouse_pos = pygame.mouse.get_pos()
+            player_screen_rect = self.player.rect.move(-self.camera_x, -self.camera_y)
+            
+            # Если мышь наведена на игрока — рисуем контур с помощью маски
+            if player_screen_rect.collidepoint(mouse_pos):
+                mask = pygame.mask.from_surface(self.player.image)
+                for pt in mask.outline():
+                    x = pt[0] + player_screen_rect.x
+                    y = pt[1] + player_screen_rect.y
+                    self.screen.set_at((x, y), (255, 255, 255))
+
         self.current_map.draw_depth_layers(self.screen, self.player.y, True, self.camera_x, self.camera_y)
         if not self.dialogue_active and not self.menu_active and not self.chest_window:
             self.current_map.draw_hover_outline(self.screen, pygame.mouse.get_pos(), self.camera_x, self.camera_y)

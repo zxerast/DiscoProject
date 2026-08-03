@@ -32,5 +32,16 @@
     "stackable": false,
     "type": "inspect",
     "dialogue": "letter"
+  },
+  "colt": {
+    "name": "Кольт",
+    "description": "Стандартный револьвер времён дикого запада",
+    "icon": "colt.png",
+    "stackable": false,
+    "type": "pistol",
+    "distance": 3,
+    "range_damage": 5,
+    "melee_damage": 2,
+    "max_bullets": 6
   }
 }
