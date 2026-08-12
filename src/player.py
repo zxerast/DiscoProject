@@ -45,6 +45,10 @@ class Player:
         self.scale = scale
         self.path = []  #   Путь движения игрока
         self.pending_destination = None
+
+        self.preview_path = []
+        self.preview_target_grid = None  # Координаты тайла (x, y), для которого посчитано превью
+        
         self.is_moving = False
 
         # Загружаем состояние из JSON
@@ -242,26 +246,100 @@ class Player:
             self.location = location
 
     def set_target(self, mouse_x, mouse_y):
-        gx, gy = self.game_map.pixel_to_grid(mouse_x, mouse_y)  #   Корды точки назначения в корды по клеткам
+        gx, gy = self.game_map.pixel_to_grid(mouse_x, mouse_y)
         end = (gx, gy)
 
+        # 1. Получаем доступное количество AP напрямую из менеджера боя
+        max_ap = None
+        if hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based:
+            max_ap = self.combat_manager.current_ap
+
         if self.is_moving:
-            # Персонаж между клетками — нельзя резко перестраивать путь,
-            # иначе получится движение по диагонали.
-            # Запоминаем цель и применим её, когда дойдём до текущей клетки.
-            self.pending_destination = end
+            # 2. Вместо отложенного pending_destination, пересчитываем путь сразу 
+            # от клетки, в которую персонаж идет прямо сейчас
+            start_for_new_path = self.path[0] if self.path else (self.grid_x, self.grid_y)
+            
+            if start_for_new_path == end:
+                self.path = [start_for_new_path] # Останавливаемся
+                self.pending_destination = None
+                return
+
+            new_path = self.game_map.find_path(start_for_new_path, end)
+            if len(new_path) > 1:
+                new_path = new_path[1:]
+                # Обрезаем новый маршрут по очкам действий
+                if max_ap is not None and len(new_path) > max_ap:
+                    new_path = new_path[:max_ap]
+                
+                # Склеиваем: текущий шаг (индекс 0) + новый обрезанный маршрут
+                if self.path:
+                    self.path = [self.path[0]] + new_path
+                else:
+                    self.path = new_path
+                    
+            self.pending_destination = None
             return
 
+        # Если мы НЕ в движении:
         start = (self.grid_x, self.grid_y)
         if start == end:
             self.pending_destination = None
+            self.preview_path = [] 
+            self.preview_target_grid = None
             return
 
-        path = self.game_map.find_path(start, end)  #   Ищем путь
-        if len(path) > 1:
-            self.path = path[1:]    #   Отбрасываем первую точку на которой мы стоим и начинаем путь со второй
+        # 3. Если клик совпал с уже обрезанным превью - используем его
+        if end == self.preview_target_grid and self.preview_path:
+            self.path = list(self.preview_path)
+        else:
+            # Иначе - считаем с нуля и тоже ОБРЕЗАЕМ по AP
+            path = self.game_map.find_path(start, end)
+            if len(path) > 1:
+                path = path[1:]
+                if max_ap is not None and len(path) > max_ap:
+                    path = path[:max_ap]
+                self.path = path
+            else:
+                self.path = []
+                
+        self.preview_path = []
+        self.preview_target_grid = None
+
+        if self.path:
             self.pending_destination = None
             self._next_waypoint()
+
+    def update_preview(self, mouse_x, mouse_y, max_ap=None):
+        if self.is_moving:
+            self.preview_path = []
+            self.preview_target_grid = None
+            return
+
+        gx, gy = self.game_map.pixel_to_grid(mouse_x, mouse_y)
+        target = (gx, gy)
+
+        # ОПТИМИЗАЦИЯ: Если мышь все еще на том же тайле, ничего не пересчитываем
+        if target == self.preview_target_grid:
+            return
+
+        self.preview_target_grid = target
+        start = (self.grid_x, self.grid_y)
+
+        if start == target:
+            self.preview_path = []
+            return
+
+        # Вычисляем путь 1 раз при смене тайла
+        path = self.game_map.find_path(start, target)
+        
+        if len(path) > 1:
+            path = path[1:] # Отбрасываем клетку, на которой стоим
+            # Обрезаем путь, если очков действий не хватает
+            if max_ap is not None and len(path) > max_ap:
+                path = path[:max_ap]
+            self.preview_path = path
+        else:
+            self.preview_path = []
     
     def stop_movement(self):
         # Если персонаж уже в пути, обрезаем маршрут, оставляя только текущую ячейку
@@ -277,6 +355,17 @@ class Player:
             self.image = self.direction[0]
             return
 
+        if hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based:
+            if not self.combat_manager.can_move():
+                # AP закончились — очищаем путь и останавливаемся
+                self.path = []
+                self.is_moving = False
+                self.current_frame = 0
+                self.image = self.direction[0]
+                return
+            # Тратим 1 AP на эту клетку
+            self.combat_manager.consume_ap()
+        
         was_moving = self.is_moving
         next_gx, next_gy = self.path[0]     #   Вторая клетка - следующая цель пути
         self.target_x, self.target_y = self.game_map.grid_to_pixel_center(next_gx, next_gy) #Обратно переводим корды конца в пиксели т.к перс движется по пикселям

@@ -15,6 +15,7 @@ from dice import SkillCheck
 from quests import QuestsWindow, load_quests_catalog, QuestManager
 from action_bar import ActionBar
 from save_manager import ensure_initial_save, get_saved_location, json_file, load_rooms_state, save_game, SAVE_PLAYER_PATH
+from combat_manager import CombatManager
 
 
 rooms = {
@@ -73,6 +74,12 @@ class Game:
         self.pending_door = None
         self.pending_save = False
         self.chest_window = None
+        self.pending_interaction_target = None
+
+        self.waypoint = pygame.transform.scale(pygame.image.load(os.path.join(BASE_DIR, "assets", "actions", "waypoint.png")).convert_alpha(), (32 * self.scale, 32 * self.scale))
+        self.active_waypoint_pos = None 
+        self.preview_path = []           # Тайлы для превью маршрута
+        self.preview_waypoint_pos = None # Координаты waypoint для курсора
 
         self.menu_active = False        # Открыто ли меню (табы)?
         self.menu_tab = 0               # 0=Навыки, 1=Инвентарь, 2=Задания
@@ -175,6 +182,7 @@ class Game:
         self.pending_chest = None
         self.pending_door = None
         self.pending_save = False
+        self.pending_interaction_target = None
         self.chest_window = None
         self.menu_active = False
         self.menu_tab = 0
@@ -182,6 +190,7 @@ class Game:
         self.pause_active = False
         self.pause_active = False
         self.camera_free = False  # <--- Сбрасываем режим свободной камеры
+        self.active_waypoint_pos = None
         self.dice_window.reset()
 
     def _rebuild_player_windows(self):  #   После смерти игрока объект пересоздаётся поэтому мы заново привязываем к нему окна
@@ -190,6 +199,8 @@ class Game:
         self.quests_window = QuestsWindow(self.screen, self.player, self.scale)
         self.menu_windows = [self.skills_window, self.inventory_window, self.quests_window]
         self.action_bar = ActionBar(self.screen, self.player, self.scale, self.inventory_window, cam_centerer = self._center_camera_on_player)
+        self.combat_manager = CombatManager(self.player, self.scale)
+        self.player.combat_manager = self.combat_manager
 
     def _get_saved_location(self):
         location = get_saved_location(START_LOCATION)
@@ -227,14 +238,20 @@ class Game:
         elapsed = pygame.time.get_ticks() - self.death_started_at
         return elapsed >= DEATH_FADE_MS + DEATH_TITLE_FADE_MS + DEATH_CONTINUE_DELAY_MS
 
-    def _init_tabs(self):      # Создаёт три одинаковых вкладки.
+    def _init_tabs(self):
         size = self.scale
 
-        menu_w = int(self.sw)
-        menu_h = int(self.sh)
+        # Базовое (оригинальное) разрешение всех ассетов
+        BASE_W = 960
+        BASE_H = 540
 
-        offset_x = (self.sw - menu_w) // 2
-        offset_y = (self.sh - menu_h) // 2
+        # Высчитываем реальный размер игровой зоны на текущем экране
+        game_w = int(BASE_W * size)
+        game_h = int(BASE_H * size)
+
+        # Считаем отступы, чтобы центрировать базовую зону (полезно для 16:10, 21:9 и т.д.)
+        offset_x = (self.sw - game_w) // 2
+        offset_y = (self.sh - game_h) // 2
 
         self.tab_names = ["Skills", "Inventory", "Quests"]
 
@@ -243,8 +260,10 @@ class Game:
         TAB_H = int(50 * size)
         TAB_GAP = int(17 * size)
 
-        start_x = offset_x + int(100 * size)   # первая вкладка
-        start_y = offset_y + int(45 * size)
+        # Координаты теперь считаются относительно отцентрированной игровой зоны.
+        # Заменили 45 на 15, так как настоящий отступ в оригинале был именно таким!
+        start_x = offset_x + int(100 * size)
+        start_y = offset_y + int(15 * size) 
 
         # ---------- Шрифт ----------
         self.tab_font = pygame.font.Font(FONT_PATH, int(25 * size))
@@ -260,7 +279,7 @@ class Game:
                 TAB_H,
             )
             self.tab_rects.append(rect)
-
+    
     def _draw_tabs(self):   #   Рисует 3 таба вверху экрана.
         mouse_pos = pygame.mouse.get_pos()
         for i, rect in enumerate(self.tab_rects):
@@ -413,6 +432,11 @@ class Game:
                         self.chest_window = None
                         self.menu_tab = 0  # открываем на вкладке навыков
                     continue
+                
+                elif event.key == pygame.K_f and not self.pause_active and not self.dialogue_active:
+                    if hasattr(self, 'combat_manager'):
+                        self.combat_manager.toggle_mode()
+                    continue
 
             if self.pause_active:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -466,6 +490,23 @@ class Game:
                     self.quests_window.handle_mousemotion(event.pos)
                 elif hasattr(self, 'action_bar'): # <--- Новая строка
                     self.action_bar.handle_mousemotion(event.pos) # <--- Новая строка
+                
+                if not self.dialogue_active and not self.menu_active and not self.chest_window:
+                    # Если мышь наведена на панель или идёт прицеливание — отключаем превью хода по тайлам
+                    if hasattr(self, 'action_bar') and (self.action_bar.rect.collidepoint(event.pos) or self.action_bar.is_targeting):
+                        self.player.preview_path = []
+                    else:
+                        world_x = event.pos[0] + self.camera_x
+                        world_y = event.pos[1] + self.camera_y
+                    
+                        # Проверяем, в пошаговом ли мы режиме
+                        max_ap = None
+                        if hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based:
+                            max_ap = self.combat_manager.current_ap
+                        
+                        self.player.update_preview(world_x, world_y, max_ap)
+
+                
                 continue
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:    #   Клик
@@ -482,8 +523,24 @@ class Game:
                             camera_y=self.camera_y, 
                             player_world_pos=(self.player.x, self.player.y)
                         )
-                        if res:  
-                            continue  # Если клик обработан панелью действий (выбор ячейки или применение), дальше не идем
+                        if isinstance(res, dict) and res.get("target") == "player":
+                            action_cost = res.get("cost", 0)
+                            action_name = res.get("action")
+                                
+                            # Если идет пошаговый бой — проверяем и списываем AP
+                            if hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based:
+                                if self.combat_manager.current_ap >= action_cost:
+                                    self.combat_manager.current_ap -= action_cost
+                                    # --- ЗАГЛУШКА ЭФФЕКТА ДЕЙСТВИЯ ---
+                                    print(f"[ЭФФЕКТ]: Применено действие '{action_name}' на игрока! Потрачено AP: {action_cost}")
+                                else:
+                                    print(f"[ОШИБКА]: Недостаточно AP для действия '{action_name}' (нужно {action_cost}, есть {self.combat_manager.current_ap})")
+                            else:
+                                # Вне пошагового боя
+                                print(f"[ЭФФЕКТ]: Применено действие '{action_name}' на игрока (вне боя)!")
+
+                        if res:
+                            continue # Прерываем дальнейшую обработку, чтобы клик не ушел на тайлы карты
 
                 if self.menu_active:            # Клик по табам
                     tab_clicked = False
@@ -558,7 +615,34 @@ class Game:
                     self.pending_save = False
                     self.pending_dialogue = False   #   Если это обычная клетка
                     self.pending_dialogue_pos = None
+                    self.pending_interaction_target = None
                     self.player.set_target(world_x, world_y)    #   То просто идём
+                    
+                    # 1. Проверяем очки действия (AP), если мы в бою
+                    max_ap = None
+                    if hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based:
+                        max_ap = self.combat_manager.current_ap
+
+                    # Переводим пиксели в координаты сетки
+                    grid_x = int(world_x // self.current_map.tile_size)
+                    grid_y = int(world_y // self.current_map.tile_size)
+                    
+                    # Получаем идеальный центр тайла клика
+                    target_x, target_y = self.current_map.grid_to_pixel_center(grid_x, grid_y)
+
+                    # 2. Идем в центр тайла (здесь желательно, чтобы set_target тоже принимал max_ap, 
+                    # если обрезка пути происходит прямо там)
+                    self.player.set_target(target_x, target_y)
+
+                    # 3. Синхронизируем waypoint с РЕАЛЬНЫМ концом пути
+                    if hasattr(self.player, 'path') and self.player.path:
+                        last_gx, last_gy = self.player.path[-1]
+                        real_target_x, real_target_y = self.current_map.grid_to_pixel_center(last_gx, last_gy)
+                        self.active_waypoint_pos = (real_target_x, real_target_y)
+                    else:
+                        # Если пути нет (например, стоим на месте), ставим по старому методу
+                        self.active_waypoint_pos = (target_x, target_y)
+        
                     continue
 
                 gx, gy = clicked_sprite["tile"]
@@ -570,6 +654,8 @@ class Game:
                 self.pending_chest = None
                 self.pending_door = None
                 self.pending_save = False
+                self.pending_interaction_target = (approach_x, approach_y)
+                is_turn_based = hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based
 
                 if self.current_map.get_chest(gx, gy):
                     self.pending_chest = (gx, gy)
@@ -578,16 +664,30 @@ class Game:
                     self.pending_door = self.current_map.get_door(gx, gy)
 
                 elif self.current_map.get_dialogue_id(gx, gy):
-                    self.pending_dialogue = True
-                    self.pending_dialogue_id = self.current_map.get_dialogue_id(gx, gy)
-                    self.pending_dialogue_pos = (gx, gy)
+                    if not is_turn_based: # <--- Запрет на вход в диалог в пошаговом режиме
+                        self.pending_dialogue = True
+                        self.pending_dialogue_id = self.current_map.get_dialogue_id(gx, gy)
+                        self.pending_dialogue_pos = (gx, gy)
+                    else:
+                        # Если бой активен, сбрасываем цель, чтобы персонаж даже не пытался идти к NPC
+                        self.pending_interaction_target = None
 
                 # если в будущем появятся костры
                 elif self.current_map.get_bonfire(gx, gy):
                     self.pending_save = True
 
-                target = self.current_map.grid_to_pixel_center(approach_x, approach_y)
-                self.player.set_target(target[0], target[1])    #   Мы готовы идти, пошли
+                # Идем к цели только если она валидна
+                if self.pending_interaction_target:
+                    target = self.current_map.grid_to_pixel_center(approach_x, approach_y)
+                    self.player.set_target(target[0], target[1])
+
+                    # Синхронизируем waypoint с РЕАЛЬНЫМ концом пути (учитывая обрезку по AP)
+                    if hasattr(self.player, 'path') and self.player.path:
+                        last_gx, last_gy = self.player.path[-1]
+                        real_target_x, real_target_y = self.current_map.grid_to_pixel_center(last_gx, last_gy)
+                        self.active_waypoint_pos = (real_target_x, real_target_y)
+                    else:
+                        self.active_waypoint_pos = (target[0], target[1])
 
     def update(self):
         if self.startup_state == "main_menu":
@@ -632,6 +732,10 @@ class Game:
         self.player.update()
         if self.player.is_moving:
             self.chest_window = None
+            self.preview_path = []
+            self.preview_waypoint_pos = None
+        else: 
+            self.active_waypoint_pos = None 
 
         if not self.camera_free:
             self.camera_x = self.player.x - self.sw // 2    #   Камера центрирована на игроке
@@ -666,29 +770,47 @@ class Game:
                 self.camera_x = limited_center_x - self.sw // 2
                 self.camera_y = limited_center_y - self.sh // 2
 
-        if self.pending_chest and not self.player.is_moving:    #   Сундук открыт пока мы стоим
-            chest = self.current_map.get_chest(*self.pending_chest)
-            if chest:
-                self.chest_window = ChestWindow(self.screen, self.player, chest, self.pending_chest, self.scale)
-            self.pending_chest = None
+        # Обновленный блок обработки действий при остановке игрока
+        if not self.player.is_moving:
+            # Проверяем, дошел ли игрок до целевой клетки
+            reached_target = True
+            if hasattr(self, 'pending_interaction_target') and self.pending_interaction_target:
+                tx, ty = self.pending_interaction_target
+                # Сверяем координаты сетки игрока с координатами approach
+                if self.player.grid_x != tx or self.player.grid_y != ty:
+                    reached_target = False
 
-        if self.pending_door and not self.player.is_moving: #   На подходе к двери переносимся
-            self._change_room(self.pending_door)
-            self.pending_door = None
+            if self.pending_chest:
+                if reached_target:
+                    chest = self.current_map.get_chest(*self.pending_chest)
+                    if chest:
+                        self.chest_window = ChestWindow(self.screen, self.player, chest, self.pending_chest, self.scale)
+                self.pending_chest = None
+                self.pending_interaction_target = None
 
-        if self.pending_save and not self.player.is_moving: #   На подходе к сейвруму -> сейвимся, вот это да
-            self._save_at_bonfire()
-            self.pending_save = False
+            if self.pending_door:
+                if reached_target:
+                    self._change_room(self.pending_door)
+                self.pending_door = None
+                self.pending_interaction_target = None
 
-        if self.pending_dialogue and not self.player.is_moving: #   Грузим окно диалога
-            dialogue_data = load_dialogue(self.pending_dialogue_id)
-            self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player, self.scale)
-            self.dialogue_source_pos = self.pending_dialogue_pos
-            self.dialogue_active = True
-            self._center_camera_on_player()
-            self.pending_dialogue = False
-            self.pending_dialogue_id = None
-            self.pending_dialogue_pos = None
+            if self.pending_save:
+                if reached_target:
+                    self._save_at_bonfire()
+                self.pending_save = False
+                self.pending_interaction_target = None
+
+            if self.pending_dialogue:
+                if reached_target:
+                    dialogue_data = load_dialogue(self.pending_dialogue_id)
+                    self.dialogue = DialogueWindow(self.screen, dialogue_data, self.player, self.scale)
+                    self.dialogue_source_pos = self.pending_dialogue_pos
+                    self.dialogue_active = True
+                    self._center_camera_on_player()
+                self.pending_dialogue = False
+                self.pending_dialogue_id = None
+                self.pending_dialogue_pos = None
+                self.pending_interaction_target = None
 
     def render(self):
         if self.startup_state == "main_menu":
@@ -713,6 +835,106 @@ class Game:
 
         self.current_map.draw(self.screen, self.camera_x, self.camera_y)    #   Карта
         self.current_map.draw_depth_layers(self.screen, self.player.y, False, self.camera_x, self.camera_y)
+
+        # Отрисовка превью маршрута (линия и waypoint)
+        if not self.action_bar.is_targeting and not self.player.is_moving and self.player.preview_path:
+            # Отрисовка только если мы в пошаговом режиме (или можно оставить для обоих)
+            if hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based:
+                path_points = [(self.player.x - self.camera_x, self.player.y - self.camera_y)]
+                
+                for gx, gy in self.player.preview_path:
+                    px, py = self.current_map.grid_to_pixel_center(gx, gy)
+                    path_points.append((px - self.camera_x, py - self.camera_y))
+                
+                if len(path_points) > 1:
+                    x1, y1 = path_points[0]
+                    x2, y2 = path_points[1]
+
+                    dx = x2 - x1
+                    dy = y2 - y1
+
+                    offset = 16 * self.scale
+                    if abs(dx) > abs(dy):
+                     # Горизонтальное движение
+                        start_point = (x1 + offset * (1 if dx > 0 else -1), y1)
+                    else:
+                        # Вертикальное движение
+                        start_point = (x1, y1 + offset * (1 if dy > 0 else -1))
+
+
+                    x1, y1 = path_points[-2]
+                    x2, y2 = path_points[-1]
+
+                    dx = x2 - x1
+                    dy = y2 - y1
+
+                    if abs(dx) > abs(dy):
+                    # Горизонтальное движение
+                        end_point = (x2 - offset * (1 if dx > 0 else -1), y2)
+                    else:
+                        # Вертикальное движение
+                        end_point = (x2, y2 - offset * (1 if dy > 0 else -1))
+
+                    # Заменяем только первую и последнюю точки
+                    path_points[0] = start_point
+                    path_points[-1] = end_point
+            
+                    pygame.draw.lines(self.screen, (200, 200, 200), False, path_points, max(1, int(2 * self.scale)))
+
+                # Отрисовка Waypoint на конце превью
+                last_gx, last_gy = self.player.preview_path[-1]
+                wp_px, wp_py = self.current_map.grid_to_pixel_center(last_gx, last_gy)
+                wp_x = wp_px - self.camera_x - self.waypoint.get_width() // 2
+                wp_y = wp_py - self.camera_y - self.waypoint.get_height() // 2
+                self.screen.blit(self.waypoint, (wp_x, wp_y))
+            
+        # Отрисовка Waypoint во время самого движения (если кликнули)
+        elif self.active_waypoint_pos:
+            wp_x = self.active_waypoint_pos[0] - self.camera_x - self.waypoint.get_width() // 2
+            wp_y = self.active_waypoint_pos[1] - self.camera_y - self.waypoint.get_height() // 2
+            self.screen.blit(self.waypoint, (wp_x, wp_y))
+            
+            # Отрисовка линии реального пути за спиной (по желанию)
+            if hasattr(self, 'combat_manager') and self.combat_manager.is_turn_based and self.player.path:
+                path_points = [(self.player.x - self.camera_x, self.player.y - self.camera_y)]
+                for gx, gy in self.player.path:
+                    px, py = self.current_map.grid_to_pixel_center(gx, gy)
+                    path_points.append((px - self.camera_x, py - self.camera_y))
+                if len(path_points) > 1:
+                    x1, y1 = path_points[0]
+                    x2, y2 = path_points[1]
+
+                    dx = x2 - x1
+                    dy = y2 - y1
+
+                    offset = 16 * self.scale
+                    if abs(dx) > abs(dy):
+                     # Горизонтальное движение
+                        start_point = (x1 + offset * (1 if dx > 0 else -1), y1)
+                    else:
+                        # Вертикальное движение
+                        start_point = (x1, y1 + offset * (1 if dy > 0 else -1))
+
+
+                    x1, y1 = path_points[-2]
+                    x2, y2 = path_points[-1]
+
+                    dx = x2 - x1
+                    dy = y2 - y1
+
+                    if abs(dx) > abs(dy):
+                    # Горизонтальное движение
+                        end_point = (x2 - offset * (1 if dx > 0 else -1), y2)
+                    else:
+                        # Вертикальное движение
+                        end_point = (x2, y2 - offset * (1 if dy > 0 else -1))
+
+                    # Заменяем только первую и последнюю точки
+                    path_points[0] = start_point
+                    path_points[-1] = end_point
+            
+
+                    pygame.draw.lines(self.screen, (150, 150, 150), False, path_points, max(1, int(2 * self.scale)))
 
         if self.action_bar.is_targeting:
             player_screen_pos = (self.player.rect.centerx - self.camera_x, self.player.rect.centery - self.camera_y)
@@ -744,6 +966,19 @@ class Game:
 
         if not self.dialogue_active and not self.menu_active and not self.skill_check:
             self.action_bar.draw(camera_x=self.camera_x, camera_y=self.camera_y)
+            if hasattr(self, 'combat_manager'):
+                preview_cost = 0
+                if self.combat_manager.is_turn_based:
+                    if self.action_bar.is_targeting:
+                        # В режиме выбора действия передаем стоимость выбранного действия
+                        preview_cost = self.action_bar.get_selected_action_cost()
+                    elif self.player.is_moving:
+                        # Во время движения показываем оставшиеся шаги текущего маршрута
+                        preview_cost = max(0, len(self.player.path) - 1)
+                    else:
+                        # При наведении покажем стоимость планируемого пути
+                        preview_cost = len(self.player.preview_path)
+                self.combat_manager.draw(self.screen, preview_cost=preview_cost)
 
         if self.menu_active:  #   Окно меню (навыки/инвентарь/задания)
             self.menu_windows[self.menu_tab].draw()

@@ -276,7 +276,13 @@ class SkillsWindow:
 
         # Иконки скиллов: значение + белая обводка при наведении/закреплении + превью справа
         hovered_idx = find_hovered(self.skill_rects, mouse_pos)
-        active_idx = self.selection.get_active(self.skill_rects, mouse_pos)
+
+        active_idx = (
+            self.selection.selected_idx
+            if self.selection.selected_idx is not None
+            else hovered_idx
+        )
+
         for i, rect in enumerate(self.skill_rects):
             # Отображаем числовое значение скилла под иконкой
             skill_name = SKILL_NAMES[i]
@@ -290,7 +296,7 @@ class SkillsWindow:
             )
             self.screen.blit(val_surf, val_rect)
 
-            if i == hovered_idx or i == self.selection.selected_idx:
+            if (i == hovered_idx or i == self.selection.selected_idx):
                 draw_hover_border(self.screen, rect)
 
         if active_idx is not None:

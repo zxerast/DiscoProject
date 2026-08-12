@@ -17,7 +17,7 @@
         "grid_y": 4
     },
 
-    "AP": 10,
+    "AP": 15,
     "AP_for_move": 0,
     "speed": 2,
     "melee_base_damage": 1,

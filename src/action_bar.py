@@ -26,7 +26,7 @@ class ActionBar:
         self.bar_h = int(raw_bar.get_height() * scale)
         self.bar_img = pygame.transform.scale(raw_bar, (self.bar_w, self.bar_h))
         
-        # Шкала здоровья
+                # Шкала здоровья
         raw_hp = pygame.image.load(hp_bar_path).convert_alpha()
         self.hp_w = int(raw_hp.get_width() * scale)
         self.hp_h = int(raw_hp.get_height() * scale)
@@ -42,6 +42,25 @@ class ActionBar:
         self.x = (self.sw - self.bar_w) // 2
         self.y = self.sh - self.bar_h
         
+        # Быстрые слоты (2x2 сетка, начиная с 547, 24 на оригинальном спрайте)
+        self.quick_slot_rects = []
+        qs_start_x = self.x + int(549 * scale)
+        qs_start_y = self.y + int(26 * scale)
+        qs_cell_size = int(44 * scale)
+
+        for i in range(4):
+            col = i % 2
+            row = i // 2
+            rect = pygame.Rect(
+                qs_start_x + col * (qs_cell_size + 3 * self.scale),
+                qs_start_y + row * (qs_cell_size + 3 * self.scale),
+                qs_cell_size,
+                qs_cell_size
+            )
+            # Привязываем каждый rect к индексам инвентаря 54, 55, 56, 57
+            self.quick_slot_rects.append((rect, 54 + i))
+        
+
         # Кнопки перезарядки (под слотами оружия)
         btn_y = self.y + int(82 * scale)
         btn_w = int(56 * scale)
@@ -109,6 +128,9 @@ class ActionBar:
 
         self.weapon_select_mode = False
         self.selected_weapon_slot = None    
+        
+        self.rect = pygame.Rect(self.x, self.y, self.bar_w, self.bar_h)
+        self.selected_action_cost = 0
 
     def get_action_rects(self):
         # Начало сетки по координатам 252, 26 на оригинальном спрайте
@@ -132,7 +154,34 @@ class ActionBar:
             rect = pygame.Rect(rx, ry, cell_size, cell_size)
             rects.append((rect, action))
         return rects
-            
+    def get_selected_action_cost(self):
+        if self.is_targeting:
+            return self.selected_action_cost
+        return 0
+    
+    def use_quick_slot(self, inv_idx):
+        if inv_idx >= len(self.player.inventory):
+            return
+        
+        slot = self.player.inventory[inv_idx]
+        if slot is None:
+            return
+
+        item = self.inventory.catalog.get(slot["id"])
+        if not item:
+            return
+
+        # Логика применения предмета
+        if item.get("type") == "healing":
+            self.player.heal(item.get("heal_points", 1))
+            slot["count"] = slot.get("count", 1) - 1
+            if slot["count"] <= 0:
+                self.player.inventory[inv_idx] = None
+        elif item.get("type") in ("pistol", "rifle", "shotgun", "melee"):
+            # Экипируем оружие
+            self.equip_weapon(slot["id"])
+        # Здесь можно добавить логику для метательного оружия (переход в режим is_targeting)
+
     def handle_mousemotion(self, pos):
         self.hover_left = self.btn_reload_left.collidepoint(pos)
         self.hover_right = self.btn_reload_right.collidepoint(pos)
@@ -141,40 +190,56 @@ class ActionBar:
         self.hover_right_weapon = self.right_weapon_rect.collidepoint(pos)
 
     def handle_mousedown(self, pos, camera_x=0, camera_y=0, player_world_pos=None):
+        self.validate_equipment()
+        # Получаем актуальный список оружия в инвентаре
+        available_weapons = self.get_available_weapon_choices()
+
+        # Обновленная проверка клика во всплывающем окне:
         if self.weapon_select_mode:
-            for rect, weapon in self.get_weapon_rects():
+            for rect, inv_idx, weapon in self.get_weapon_rects():
                 if rect.collidepoint(pos):
-                    self.equip_weapon(weapon["id"])
+                    self.equip_weapon(inv_idx)
                     self.weapon_select_mode = False
                     return True
-            # Если кликнули мимо списка доступного оружия, панель все равно можно закрыть, 
-            # но проверка по самим слотам идет ниже
+            self.weapon_select_mode = False
 
+        # Клик по левому слоту
         if self.left_weapon_rect.collidepoint(pos):
-            # Если панель открыта для левого слота - закрываем. Иначе - открываем.
-            if self.weapon_select_mode and self.selected_weapon_slot == "left":
+            if self.weapon_select_mode and self.selected_weapon_slot == 58:
                 self.weapon_select_mode = False
-            else:
+            # Открываем если есть доступное оружие или слот уже занят
+            elif available_weapons or self.player.inventory[58] is not None or self.player.inventory[59] is not None:
                 self.weapon_select_mode = True
-                self.selected_weapon_slot = "left"
+                self.selected_weapon_slot = 58
             return True
 
+        # Клик по правому слоту
         if self.right_weapon_rect.collidepoint(pos):
-            # Если панель открыта для правого слота - закрываем. Иначе - открываем.
-            if self.weapon_select_mode and self.selected_weapon_slot == "right":
+            if self.weapon_select_mode and self.selected_weapon_slot == 59:
                 self.weapon_select_mode = False
-            else:
+            # Открываем если есть доступное оружие или слот уже занят
+            elif available_weapons or self.player.inventory[59] is not None or self.player.inventory[58] is not None:
                 self.weapon_select_mode = True
-                self.selected_weapon_slot = "right"
+                self.selected_weapon_slot = 59
             return True
-            
-        # ... (дальше идет остальной код: проверка клика по сетке действий и т.д.)
+
+        # Проверка клика по быстрым слотам
+        for rect, inv_idx in self.quick_slot_rects:
+            if rect.collidepoint(pos):
+                self.use_quick_slot(inv_idx)
+                return True
 
         # 1. СНАЧАЛА проверяем клик по сетке действий (позволяет переключать действия)
         action_rects = self.get_action_rects()
         for rect, action in action_rects:
             if rect.collidepoint(pos):
+                if self.is_targeting and self.selected_action == action["name"]:
+                    self.selected_action = None
+                    self.selected_action_cost = None
+                    self.is_targeting = False
+                    return True
                 self.selected_action = action["name"] # Запоминаем по ключу "name"
+                self.selected_action_cost = action["AP"]
                 self.is_targeting = True 
                 self.player.stop_movement()
                 return "action_selected"
@@ -183,14 +248,16 @@ class ActionBar:
         if self.is_targeting:
             if player_world_pos and self._is_clicked_on_player(pos, player_world_pos, camera_x, camera_y):
                 applied_action = self.selected_action
+                cost = self.selected_action_cost
                 self.selected_action = None
                 self.is_targeting = False
-                return applied_action
+                return {"action": applied_action, "cost": cost, "target": "player"}
             else:
                 self.selected_action = None
                 self.is_targeting = False
                 return None
 
+        
         if self.portrait_rect.collidepoint(pos):
             current_time = pygame.time.get_ticks()
             if current_time - self.last_click_time <= self.double_click_threshold:
@@ -208,108 +275,116 @@ class ActionBar:
         if self.btn_reload_right.collidepoint(pos):
             self.reload_weapon(1)
             return True
-            
+        if self.rect.collidepoint(pos):
+            return True           
+
         return False
+    
+    def get_inventory_weapons(self):
+        weapons = []
+        for i, slot in enumerate(self.player.inventory):
+            # Игнорируем уже экипированное в руки
+            if i in (58, 59) or slot is None:
+                continue
+            item = self.inventory.catalog.get(slot["id"])
+            if item and item.get("type") in ("pistol", "rifle", "shotgun", "melee"):
+                weapons.append((i, slot)) # Возвращаем кортеж с индексом
+        return weapons
+
+    def get_available_weapon_choices(self):
+        weapons = self.get_inventory_weapons()
+
+        for equip_idx in (58, 59):
+            if equip_idx >= len(self.player.inventory):
+                continue
+            if equip_idx == self.selected_weapon_slot:
+                continue
+
+            equipped = self.player.inventory[equip_idx]
+            if equipped is not None:
+                weapons.insert(0, (equip_idx, equipped))
+
+        if self.selected_weapon_slot is not None and self.player.inventory[self.selected_weapon_slot] is not None:
+            weapons.insert(0, (self.selected_weapon_slot, self.player.inventory[self.selected_weapon_slot]))
+
+        return weapons
+
+    def get_weapon_rects(self):
+        if not self.weapon_select_mode:
+            return []
+        weapons = self.get_available_weapon_choices()
+
+        if not weapons:
+            self.weapon_select_mode = False
+            return []
+
+        cell_size = int(48 * self.scale)
+        gap = int(3 * self.scale)
+        slot_rect = self.left_weapon_rect if self.selected_weapon_slot == 58 else self.right_weapon_rect
+        total_width = len(weapons) * cell_size + max(0, len(weapons) - 1) * gap
+        start_x = slot_rect.centerx - total_width // 2
+        start_y = slot_rect.y - cell_size - int(12 * self.scale)
+
+        rects = []
+        for i, (inv_idx, weapon) in enumerate(weapons):
+            rect = pygame.Rect(start_x + i * (cell_size + gap), start_y, cell_size, cell_size)
+            rects.append((rect, inv_idx, weapon))
+        return rects
+
+    def equip_weapon(self, inv_idx):
+        target_slot = self.selected_weapon_slot
+        
+        if inv_idx == target_slot:
+            # Снимаем оружие
+            item = self.player.inventory[target_slot]
+            for i in range(54):
+                if i < len(self.player.inventory):
+                    if self.player.inventory[i] is None:
+                        self.player.inventory[i] = item
+                        self.player.inventory[target_slot] = None
+                        break
+                else:
+                    self.player.inventory.append(item)
+                    self.player.inventory[target_slot] = None
+                    break
+        else:
+            while len(self.player.inventory) <= max(target_slot, inv_idx):
+                self.player.inventory.append(None)
+            self.player.inventory[target_slot], self.player.inventory[inv_idx] = \
+                self.player.inventory[inv_idx], self.player.inventory[target_slot]
+
+        self.validate_equipment()
+
+    def validate_equipment(self):
+        # Гарантируем длину списка
+        while len(self.player.inventory) <= 59:
+            self.player.inventory.append(None)
+            
+        left_slot = self.player.inventory[58]
+        right_slot = self.player.inventory[59]
+        
+        # Обновляем старые атрибуты для совместимости с другими системами, если они их читают
+        self.player.left_arm_weapon = left_slot
+        self.player.right_arm_weapon = right_slot
+        
+        # Обновляем категорию действий (рукопашная / стрельба и тд)
+        if left_slot:
+            item = self.inventory.catalog.get(left_slot["id"])
+            self.player.equipped_weapon_category = item.get("type", "unarmed") if item else "unarmed"
+        elif right_slot:
+            item = self.inventory.catalog.get(right_slot["id"])
+            self.player.equipped_weapon_category = item.get("type", "unarmed") if item else "unarmed"
+        else:
+            self.player.equipped_weapon_category = "unarmed"
 
     def _is_clicked_on_player(self, mouse_pos, player_world_pos, cam_x, cam_y):
         # Переводим мировые координаты игрока в экранные или используем player.rect с учетом камеры
         p_screen_rect = self.player.rect.move(-cam_x, -cam_y)
         return p_screen_rect.collidepoint(mouse_pos)
 
-    def get_inventory_weapons(self):
-        weapons = []
-        for slot in self.player.inventory:
-            if slot is None:
-                continue
-            item = self.inventory.catalog.get(slot["id"])
-            if item is None:
-                continue
-            if item["type"] in ("pistol", "rifle", "shotgun", "melee"):
-                weapons.append(slot)
-
-        return weapons
-        
-    def get_weapon_rects(self):
-        if not self.weapon_select_mode:
-            return []
-
-        weapons = self.get_inventory_weapons()
-
-        cell_size = int(48 * self.scale)
-        gap = int(3 * self.scale)
-
-        if self.selected_weapon_slot == "left":
-            slot_rect = self.left_weapon_rect
-        else:
-            slot_rect = self.right_weapon_rect
-
-        total_width = len(weapons) * cell_size + max(0, len(weapons) - 1) * gap
-
-        start_x = slot_rect.centerx - total_width // 2
-        start_y = slot_rect.y - cell_size - int(12 * self.scale)
-
-        rects = []
-
-        for i, weapon in enumerate(weapons):
-            rect = pygame.Rect(
-                start_x + i * (cell_size + gap),
-                start_y,
-                cell_size,
-                cell_size
-            )
-            rects.append((rect, weapon))
-
-        return rects
-
-    def equip_weapon(self, weapon_id):
-        if self.selected_weapon_slot == "left":
-            # Если кликаем по тому же оружию — снимаем его
-            if self.player.left_arm_weapon and self.player.left_arm_weapon.get("id") == weapon_id:
-                self.player.left_arm_weapon = None
-            else:
-                self.player.left_arm_weapon = {"id": weapon_id}
-                # Если это же оружие было в правой руке — убираем его оттуда
-                if self.player.right_arm_weapon and self.player.right_arm_weapon.get("id") == weapon_id:
-                    self.player.right_arm_weapon = None
-        else:
-            # Если кликаем по тому же оружию — снимаем его
-            if self.player.right_arm_weapon and self.player.right_arm_weapon.get("id") == weapon_id:
-                self.player.right_arm_weapon = None
-            else:
-                self.player.right_arm_weapon = {"id": weapon_id}
-                # Если это же оружие было в левой руке — убираем его оттуда
-                if self.player.left_arm_weapon and self.player.left_arm_weapon.get("id") == weapon_id:
-                    self.player.left_arm_weapon = None
-
-        self.validate_equipment()
-
     def reload_weapon(self, slot_index):
         # Функция-заглушка для механики перезарядки
         print(f"Вызвана перезарядка для слота {slot_index}!")
-
-    def validate_equipment(self):
-        # Собираем ID всех существующих в инвентаре предметов
-        inv_ids = [slot["id"] for slot in self.player.inventory if slot is not None]
-
-        # Проверяем, есть ли экипированное оружие в инвентаре
-        left_exists = self.player.left_arm_weapon and self.player.left_arm_weapon["id"] in inv_ids
-        right_exists = self.player.right_arm_weapon and self.player.right_arm_weapon["id"] in inv_ids
-
-        # Очищаем слоты, если оружие было выброшено
-        if self.player.left_arm_weapon and not left_exists:
-            self.player.left_arm_weapon = None
-        if self.player.right_arm_weapon and not right_exists:
-            self.player.right_arm_weapon = None
-
-        # Обновляем категорию действий на основе оставшегося оружия
-        if left_exists:
-            item = self.inventory.catalog.get(self.player.left_arm_weapon["id"])
-            self.player.equipped_weapon_category = item.get("type", "unarmed") if item else "unarmed"
-        elif right_exists:
-            item = self.inventory.catalog.get(self.player.right_arm_weapon["id"])
-            self.player.equipped_weapon_category = item.get("type", "unarmed") if item else "unarmed"
-        else:
-            self.player.equipped_weapon_category = "unarmed"
 
     def draw(self, camera_x=0, camera_y=0):
         # 0. Проверяем, не выбросил ли игрок экипированное оружие
@@ -400,7 +475,7 @@ class ActionBar:
 
         if self.weapon_select_mode:
             mouse = pygame.mouse.get_pos()
-            for rect, weapon in self.get_weapon_rects():
+            for rect, inv_idx, weapon in self.get_weapon_rects():
                 # Рисуем png-фон ячейки из инвентаря вместо серой подложки
                 # Подгоняем размер под текущий rect
                 cell_bg = pygame.transform.scale(self.inventory.cell_img, (rect.w, rect.h))
@@ -416,6 +491,33 @@ class ActionBar:
                 # Оставляем белую обводку при наведении
                 if rect.collidepoint(mouse):
                     pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
+
+        # Отрисовка ячеек быстрого доступа
+        mouse_pos = pygame.mouse.get_pos()
+        for rect, inv_idx in self.quick_slot_rects:
+            # Отрисовка иконки предмета, если он есть
+            if inv_idx < len(self.player.inventory):
+                slot = self.player.inventory[inv_idx]
+                if slot:
+                    icon = self.inventory._get_icon(slot["id"])
+                    if icon:
+                        ix = rect.x + (rect.w - icon.get_width()) // 2
+                        iy = rect.y + (rect.h - icon.get_height()) // 2
+                        self.screen.blit(icon, (ix, iy))
+                        
+                        # Опционально: отрисовка счетчика стака (если предметов больше 1)
+                        item_data = self.inventory.catalog.get(slot["id"])
+                        if item_data and item_data.get("stackable") and slot["count"] > 1:
+                            count_surf = self.inventory.stack_font.render(str(slot["count"]), True, (255, 255, 255))
+                            cx = rect.right - count_surf.get_width() - 4
+                            cy = rect.bottom - count_surf.get_height() - 2
+                            self.screen.blit(count_surf, (cx, cy))
+
+            # Серый полупрозрачный квадрат при наведении (как у ячеек действий)
+            if rect.collidepoint(mouse_pos):
+                hover_surf = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+                hover_surf.fill((128, 128, 128, 128))
+                self.screen.blit(hover_surf, rect.topleft)
 
     def _draw_button(self, rect, text, is_hovered):
         color = (255, 255, 255) if is_hovered else (215, 161, 37)

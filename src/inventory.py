@@ -18,11 +18,11 @@ ITEM_ACTIONS = {
 }
 
 # Сетка 9 столбцов x 7 строк
-GRID_COLS = 11
+GRID_COLS = 6
 GRID_ROWS = 9
 
 # Левый верхний угол сетки (в координатах menu.png)
-GRID_START_X = 108
+GRID_START_X = 348
 GRID_START_Y = 95
 
 ITEMS_JSON = os.path.join(BASE_DIR, "items.json")
@@ -63,9 +63,32 @@ class InventoryWindow:
                 y = self.offset_y + int((GRID_START_Y + row * CELL_NATIVE_H) * size)
                 self.cell_rects.append(pygame.Rect(x, y, self.cell_w, self.cell_h))
 
+        # Генерация ячеек быстрого доступа (индексы 54-57)
+        QUICK_START_X = 120
+        QUICK_START_Y = 213
+        
+        for i in range(4):
+            x = self.offset_x + int((QUICK_START_X + i * CELL_NATIVE_W) * size)
+            y = self.offset_y + int((QUICK_START_Y) * size)
+            self.cell_rects.append(pygame.Rect(x, y, self.cell_w, self.cell_h))
+        
+        # Слоты оружия (индексы 58 и 59)
+        W_START_X = 107
+        W_START_Y = 93
+        W_WIDTH = 108
+        W_HEIGHT = 96
+        W_GAP = 2 # Отступ между руками (располагаем их по горизонтали)
+
+        for i in range(2):
+            x = self.offset_x + int((W_START_X + i * (W_WIDTH + W_GAP)) * size)
+            y = self.offset_y + int(W_START_Y * size)
+            self.cell_rects.append(pygame.Rect(x, y, int(W_WIDTH * size), int(W_HEIGHT * size)))
+            
+        # Состояние всплывающего меню выбора оружия
+        self.weapon_select_mode = False
+        self.selected_weapon_slot = None
         # Панель превью (общая с skills)
         self.preview = PreviewPanel(screen, size, self.offset_x, self.offset_y)
-
         self.stack_font = pygame.font.Font(FONT_PATH, int(16 * size))
 
         self.selection = Selection()
@@ -228,13 +251,99 @@ class InventoryWindow:
         # Убираем хвостовые None
         while inv and inv[-1] is None:
             inv.pop()
+    
+    def _get_inventory_weapons(self):
+        weapons = []
+        for i, slot in enumerate(self.player.inventory):
+            if i in (58, 59) or slot is None:
+                continue
+            item = self.catalog.get(slot["id"])
+            if item and item.get("type") in ("pistol", "rifle", "shotgun", "melee"):
+                weapons.append((i, slot)) # Сохраняем индекс, чтобы знать откуда забирать
+        return weapons
 
+    def _get_available_weapon_choices(self):
+        weapons = self._get_inventory_weapons()
+
+        for equip_idx in (58, 59):
+            if equip_idx >= len(self.player.inventory):
+                continue
+            if equip_idx == self.selected_weapon_slot:
+                continue
+
+            equipped = self.player.inventory[equip_idx]
+            if equipped is not None:
+                weapons.insert(0, (equip_idx, equipped))
+
+        equipped = self._get_slot(self.selected_weapon_slot)
+        if equipped is not None:
+            weapons.insert(0, (self.selected_weapon_slot, equipped))
+
+        return weapons
+
+    def _get_weapon_rects(self):
+        if not self.weapon_select_mode: return []
+        weapons = self._get_available_weapon_choices()
+
+        if not weapons:
+            self.weapon_select_mode = False
+            return []
+            
+        cell_size = int(CELL_NATIVE_W * self.size)
+        gap = int(4 * self.size)
+        
+        slot_rect = self.cell_rects[self.selected_weapon_slot]
+        total_width = len(weapons) * cell_size + max(0, len(weapons) - 1) * gap
+        start_x = slot_rect.centerx - total_width // 2
+        start_y = slot_rect.y - cell_size - int(12 * self.size)
+        
+        rects = []
+        for i, (inv_idx, weapon) in enumerate(weapons):
+            r = pygame.Rect(start_x + i * (cell_size + gap), start_y, cell_size, cell_size)
+            rects.append((r, inv_idx, weapon))
+        return rects
+    
     def handle_mousedown(self, pos):
-        # Контекстное меню — обработать клик по нему
+        # 1. Проверяем клик по всплывающему окну выбора оружия
+        if self.weapon_select_mode:
+            for r, inv_idx, weapon in self._get_weapon_rects():
+                if r.collidepoint(pos):
+                    if inv_idx == self.selected_weapon_slot:
+                        # Снимаем оружие и кладем в первую свободную ячейку (0-53)
+                        item = self.player.inventory[self.selected_weapon_slot]
+                        for i in range(54):
+                            if i < len(self.player.inventory):
+                                if self.player.inventory[i] is None:
+                                    self.player.inventory[i] = item
+                                    self.player.inventory[self.selected_weapon_slot] = None
+                                    break
+                            else:
+                                self.player.inventory.append(item)
+                                self.player.inventory[self.selected_weapon_slot] = None
+                                break
+                    else:
+                        self._swap_slots(inv_idx, self.selected_weapon_slot)
+                    self.weapon_select_mode = False
+                    return None
+            self.weapon_select_mode = False # Клик мимо окна закрывает его
+
+        # (Оставляем существующий код контекстного меню)
         if self.context_menu is not None:
             return self._handle_context_click(pos)
 
         clicked = find_hovered(self.cell_rects, pos)
+        
+        # 2. Если кликнули по пустому слоту оружия - открываем окно выбора
+        if clicked in (58, 59) and self._get_slot(clicked) is None:
+            self.selected_weapon_slot = clicked
+            if self._get_available_weapon_choices():
+                self.weapon_select_mode = True
+            else:
+                self.selected_weapon_slot = None
+            self.drag_src = None
+            return None
+            
+        # (Оставляем существующий код drag_src)
         if self._get_slot(clicked) is not None:
             self.drag_src = clicked
             self.drag_start_pos = pos
@@ -257,6 +366,14 @@ class InventoryWindow:
             # Завершаем перетаскивание
             dst = find_hovered(self.cell_rects, pos)
             if dst is not None and dst != self.drag_src:
+                # Проверка: если кладем в слоты рук, это должно быть оружие
+                if dst in (58, 59):
+                    item = self.catalog.get(self.player.inventory[self.drag_src]["id"])
+                    if not item or item.get("type") not in ("pistol", "rifle", "shotgun", "melee"):
+                        self.drag_src = None
+                        self.drag_active = False
+                        return None
+
                 self._swap_slots(self.drag_src, dst)
                 # Корректируем выделение
                 if self.selection.selected_idx == self.drag_src:
@@ -273,8 +390,13 @@ class InventoryWindow:
         self.drag_active = False
 
         if src is not None and self._get_slot(src) is not None:
-            self.selection.handle_click(self.cell_rects, self.drag_start_pos)
-            self._open_context_menu(src)
+        # Если просто кликнули по занятому слоту оружия - открываем меню (вместо контекстного)
+            if src in (58, 59):
+                self.weapon_select_mode = True
+                self.selected_weapon_slot = src
+            else:
+                self.selection.handle_click(self.cell_rects, self.drag_start_pos)
+                self._open_context_menu(src)
         return None
 
     def draw(self):
@@ -289,7 +411,8 @@ class InventoryWindow:
 
         # Сетка ячеек
         for idx, rect in enumerate(self.cell_rects):
-            self.screen.blit(self.cell_img, rect)
+            if idx not in (58, 59):
+                self.screen.blit(self.cell_img, rect)
 
             # Иконка предмета
             slot = self._get_slot(idx)
@@ -304,8 +427,14 @@ class InventoryWindow:
                         draw_icon = ghost
                     else:
                         draw_icon = icon
-                    ix = rect.x + (self.cell_w - icon.get_width()) // 2
-                    iy = rect.y + (self.cell_h - icon.get_height()) // 2
+
+                    # Увеличиваем спрайт в 2 раза только для слотов оружия инвентаря
+                    if idx in (58, 59):
+                        w, h = draw_icon.get_size()
+                        draw_icon = pygame.transform.scale(draw_icon, (w * 2, h * 2))
+
+                    ix = rect.x + (rect.w - draw_icon.get_width()) // 2
+                    iy = rect.y + (rect.h - draw_icon.get_height()) // 2
                     self.screen.blit(draw_icon, (ix, iy))
 
                 # Счётчик стака в правом нижнем углу ячейки
@@ -344,6 +473,22 @@ class InventoryWindow:
                 if icon:
                     self.screen.blit(icon, (mouse_pos[0] - icon.get_width() // 2,
                                             mouse_pos[1] - icon.get_height() // 2))
+
+        # Отрисовка всплывающего меню выбора оружия
+        if self.weapon_select_mode:
+            mouse_pos = pygame.mouse.get_pos()
+            for rect, inv_idx, weapon in self._get_weapon_rects():
+                cell_bg = pygame.transform.scale(self.cell_img, (rect.w, rect.h))
+                self.screen.blit(cell_bg, rect.topleft)
+                
+                icon = self._get_icon(weapon["id"])
+                if icon:
+                    ix = rect.x + (rect.w - icon.get_width()) // 2
+                    iy = rect.y + (rect.h - icon.get_height()) // 2
+                    self.screen.blit(icon, (ix, iy))
+                    
+                if rect.collidepoint(mouse_pos):
+                    pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
 
     def _draw_context_menu(self):
         ctx = self.context_menu

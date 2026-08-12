@@ -159,18 +159,18 @@ class Scrollbar:
 
 
 class Selection:    #   Закрепление превью по клику. Общее для skills и inventory.
-
     def __init__(self):
         self.selected_idx = None
+        self.clicked = None
 
     def handle_click(self, rects, pos):     #   Клик по области — закрепить/открепить/сменить.
-        clicked = find_hovered(rects, pos)
-        if clicked is None:
+        self.clicked = find_hovered(rects, pos)
+        if self.clicked is None:
             return
-        if self.selected_idx == clicked:
+        if self.selected_idx == self.clicked:
             self.selected_idx = None
         else:
-            self.selected_idx = clicked
+            self.selected_idx = self.clicked
 
     def get_active(self, rects, mouse_pos):     #   Возвращает индекс для превью: hover приоритетнее selected.
         hovered = find_hovered(rects, mouse_pos)
